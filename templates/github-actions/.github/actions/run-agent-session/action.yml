@@ -1,0 +1,874 @@
+name: Run Agent Session
+description: >-
+  Runs one agent session against a prepared prompt and returns the model's
+  answer as text. The vendor is an input, so every caller gets the same
+  contract regardless of who answers: the same preference-list walk, the same
+  outcome vocabulary, the same output files.
+
+  There are three vendors and two CLIs, because a vendor names a *billing
+  arrangement*, not a program:
+
+  | vendor      | CLI         | credential                | billed to           |
+  | ----------- | ----------- | ------------------------- | ------------------- |
+  | `copilot`   | Copilot CLI | the workflow's own GitHub identity | Copilot premium requests |
+  | `anthropic` | Claude Code | `ANTHROPIC_API_KEY`       | Anthropic Platform API |
+  | `claude`    | Claude Code | `CLAUDE_CODE_OAUTH_TOKEN` | a Claude Pro/Max subscription |
+
+  `anthropic` and `claude` run the same binary on the same model ids and are
+  interchangeable in every respect except which account pays. That is the
+  whole point of splitting them: the choice of who pays is made by putting a
+  label on an Issue, not by editing a workflow.
+
+  This is the one place a vendor difference is allowed to exist. Above it the
+  agent workflows are vendor-blind: they build a prompt, run a session, parse
+  a verdict, publish it. Below it the two CLIs disagree about flags, output
+  shape and failure phrasing, and that disagreement is confined here.
+
+inputs:
+  vendor:
+    description: >-
+      Who answers and who pays: `copilot`, `anthropic` or `claude`. See the
+      table in this action's description -- the last two are the same CLI on
+      the same models, differing only in the credential and the bill.
+
+      Comes from the third segment of an `agent:{role}:{vendor}` label, so
+      the label is what chooses it.
+    required: true
+
+  prompt-file:
+    description: >-
+      Path to the prepared prompt. Absolute, and under $RUNNER_TEMP -- every
+      caller builds its prompt there rather than in the checkout (#98).
+      Copilot reads it from stdin; Claude Code is pointed at it by path and
+      reads it with its own Read tool, which is why both Claude Code vendors
+      pass `--add-dir "$RUNNER_TEMP"`. Neither form passes it as an argv element -- Linux caps
+      a single argument at 128 KiB (MAX_ARG_STRLEN) and a diff-bearing prompt
+      exceeds that long before the larger ARG_MAX applies.
+    required: true
+
+  models:
+    description: >-
+      Comma-separated model id preference list, tried in order. The next
+      candidate is only tried when a model is unavailable to the calling
+      identity -- never after a real failure. A cheap fallback after a real
+      failure would silently defeat whatever tier the caller chose.
+
+      The ids are CLI-native and must not be copied between CLIs: Copilot CLI
+      spells its Opus 4.8 `claude-opus-4.8`, Claude Code spells the same model
+      `claude-opus-4-8`. `anthropic` and `claude` are the same CLI, so they
+      take the same spelling and callers hand them the same list.
+    required: true
+
+  max-ai-credits:
+    description: >-
+      Copilot only. Soft credit cap for the session. The CLI rejects any
+      value below 30, so that is a floor, not a tuning choice. Ignored on
+      both Claude Code vendors.
+    required: false
+    default: "75"
+
+  max-turns:
+    description: >-
+      Claude Code only -- `anthropic` and `claude` alike. Turn ceiling for
+      the session. Ignored when vendor is `copilot`. A session that hits it is classified `budget_exhausted`,
+      not `completed`, so a truncated answer is never mistaken for a finished
+      one.
+
+      This and `max-ai-credits` are NOT the same knob in different units, and
+      no conversion between them exists. Credits price what a session spent;
+      turns count how many times it acted. A role whose credit cap was tuned
+      by watching it work is not tuned at all on the other vendor, so
+      changing a label's vendor segment silently reprices the role. Set both
+      per role, from observation, rather than assuming one implies the other.
+    required: false
+    default: "60"
+
+  capability:
+    description: >-
+      What this session is allowed to do: `read-only` or `write`.
+
+      This is deliberately ONE semantic knob rather than a pass-through of
+      each CLI's tool flags, because the two vendors' postures are opposites
+      and a pass-through fails silently. Copilot is subtractive -- it starts
+      able and `--excluded-tools` takes capability away. Claude is additive --
+      under `--permission-mode dontAsk` it starts unable and `--allowedTools`
+      grants capability. A caller that said "remove nothing but task" meant
+      "you may edit"; the same words handed to the additive vendor mean "you
+      may do nothing at all". A role would then run, write no code, and be
+      indistinguishable from a model that underperformed.
+
+      So the caller states the intent and this action encodes it per vendor.
+      Adding a third posture means editing the two case statements below, in
+      one file, where they can be read side by side.
+
+      `read-only` is the default because it is the fail-safe one: a caller
+      that forgets gets a session that cannot change the checkout, rather
+      than one that can.
+    required: false
+    default: "read-only"
+
+  api-key:
+    description: >-
+      The `anthropic` vendor's credential. An Anthropic Platform API key,
+      which the caller must pass from `secrets.ANTHROPIC_API_KEY` -- a
+      composite action cannot read `secrets` itself, so a key that is set on
+      the repository but not threaded through a caller never reaches this
+      process.
+
+      Read only when vendor is `anthropic`. The `claude` vendor ignores it,
+      and takes `oauth-token` instead.
+
+      Empty is allowed, and fails at the point of use rather than here: a
+      caller running `vendor: copilot` has no reason to hold a Claude key,
+      and refusing to start would make the copilot path depend on a secret it
+      never uses. Callers pass both credentials unconditionally for exactly
+      that reason -- a secret threaded through only on the branch that needs
+      it is a secret that turns out to be missing the first time someone
+      flips a label.
+    required: false
+    default: ""
+
+  oauth-token:
+    description: >-
+      The `claude` vendor's credential. A Claude Code OAuth token, which the
+      caller must pass from `secrets.CLAUDE_CODE_OAUTH_TOKEN`. Mint one with
+      `claude setup-token`; it bills the subscription that authorised it
+      rather than the Anthropic Platform API.
+
+      Read only when vendor is `claude`. The `anthropic` vendor ignores it --
+      and could not use it anyway, because `--bare` never reads OAuth
+      credentials. That incompatibility is the reason the two vendors differ
+      by more than an environment variable; see `invoke_claude` below.
+
+      Empty is allowed, on the same reasoning as `api-key`.
+    required: false
+    default: ""
+
+  step-label:
+    description: >-
+      Human-readable label for the run's log group and failure summary,
+      e.g. "Reviewing" or "Fixing"
+    required: false
+    default: "Running"
+
+# Every file output below is an ABSOLUTE path under $RUNNER_TEMP, and every
+# scratch file this action writes goes there -- the raw transcripts and the
+# stderr capture as well as the four declared outputs.
+#
+# They used to be bare filenames, resolved against the caller's working
+# directory, which is the checkout. That put agent telemetry in the tree of
+# every workflow that calls this action, and #84's implementation commit
+# carried eleven such files. It also broke that task's retry: the files had
+# become tracked on the branch, so the next run's fresh copies were untracked
+# files in the way of a `git checkout`, which refuses to clobber them.
+#
+# The callers' defences against that -- scoped staging in
+# `agent-02-implement.yml`, and the root-file filter on its dirtiness check --
+# were written when this action's paths could not move, because they are a
+# contract read by three workflows. This is that contract change.
+#
+# Both are gone now: #98 moved every other workflow's scratch the same way,
+# so `git add -A` means what it says again and the dirtiness check no longer
+# has to discard a legitimately new file at the repository root.
+#
+# READ THESE THROUGH THE OUTPUTS. A caller that hardcodes the bare filename
+# is reading a path this action no longer writes, and the failure is silent:
+# `[ -f agent-session-failure.json ]` is simply false, and a missing failure
+# summary reads as a session that did not fail.
+#
+# The one sanctioned exception is a failure reporter running on `failure()`,
+# which includes a run that failed before this action was reached. A skipped
+# step's outputs are empty strings, and in Python `Path("")` is `.` -- a
+# directory that exists -- so reading through the output would crash the step
+# whose whole job is to explain the failure. Those four reporters join
+# $RUNNER_TEMP and the filename themselves, which is why the failure file's
+# name is part of this contract rather than an implementation detail: it is
+# `agent-session-failure.json`, and it does not move without updating them.
+outputs:
+  resolved-model:
+    description: The model id that actually produced output
+    value: ${{ steps.run.outputs.resolved_model }}
+  resolved-vendor:
+    description: >-
+      The vendor that produced output. Echoed back so a caller rendering a
+      report does not have to thread its own input through to the summary.
+    value: ${{ steps.run.outputs.resolved_vendor }}
+  duration-seconds:
+    description: >-
+      Whole seconds spent on the model-preference walk: from immediately
+      before the first candidate is tried to immediately after the walk ends,
+      however it ended.
+      Always a non-negative integer, on every path -- the success path, the
+      path where no model produced output, and a run that failed inside the
+      walk. The step that measures it runs under `always()` precisely so
+      that the total-failure path still reports a number, because a caller
+      recording what a session cost needs that most on the runs that failed.
+      Excludes the CLI install and the model-list dump above it. Those are
+      runner overhead rather than session time, and a duration that moved
+      with npm's mood would not be comparable between runs.
+    value: ${{ steps.duration.outputs.duration_seconds }}
+  assistant-text-file:
+    description: >-
+      Path to a file holding the joined text of the session's assistant
+      messages. Written even on a failed run if any text survived.
+    value: ${{ runner.temp }}/agent-assistant-text.txt
+  final-text-file:
+    description: >-
+      Path to a file holding only the session's *last* assistant message --
+      its Completion Report, for the roles that end with one. Prefer this
+      over assistant-text-file anywhere the text is rendered to a human as
+      the session's report: a session that narrates while it works ("Now
+      the doc.") puts every one of those lines into the joined file, and
+      they end up in the pull request body verbatim. Falls back to the
+      joined text when no single final message could be isolated, so it is
+      never empty where assistant-text-file would not be.
+
+      Claude returns one `.result` string rather than a stream of messages,
+      so for that vendor this file and the joined one are identical. The two
+      outputs stay distinct anyway: which one a caller wants is a property of
+      the caller, not of whoever happens to be answering today.
+    value: ${{ runner.temp }}/agent-final-text.txt
+  outcome-file:
+    description: >-
+      Path to the classifier verdict for the attempt that produced output (or
+      the last attempt tried, on total failure). Both vendors write the same
+      schema -- see the docstring in classify-claude-outcome.py for why that
+      matters.
+    value: ${{ runner.temp }}/agent-outcome.json
+  failure-file:
+    description: >-
+      Path to a failure summary, written only when no model produced usable
+      output. Callers should check for its existence before reading it.
+    value: ${{ runner.temp }}/agent-session-failure.json
+
+runs:
+  using: composite
+  steps:
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: "24"
+
+    # Vendor is one word; what it means is two independent facts. Resolving
+    # them once, here, is what keeps every step below from re-deriving the
+    # mapping and eventually disagreeing about it -- which is the failure
+    # this action was created to prevent, reappearing one level down.
+    #
+    #   cli   which program runs, and therefore which flags, which output
+    #         shape and which classifier
+    #   auth  which credential authenticates, and therefore which account is
+    #         billed and which secret a failure should name
+    #
+    # `anthropic` and `claude` share a cli and differ in auth. Nothing else
+    # differs, and nothing else is allowed to: a role must not change how it
+    # behaves because someone changed who pays for it.
+    #
+    # Step outputs rather than $GITHUB_ENV deliberately. $GITHUB_ENV would
+    # leak both values into the calling job, where they would outlive this
+    # action and be visible to steps that have nothing to do with it.
+    - name: Resolve Vendor
+      id: resolve
+      shell: bash
+      env:
+        VENDOR: ${{ inputs.vendor }}
+      run: |
+        set -euo pipefail
+
+        case "$VENDOR" in
+          copilot)   CLI=copilot; AUTH=copilot ;;
+          anthropic) CLI=claude;  AUTH=api-key ;;
+          claude)    CLI=claude;  AUTH=oauth ;;
+          *)
+            echo "::error::Unknown vendor '$VENDOR'. Expected 'copilot'," \
+                 "'anthropic' or 'claude'."
+            exit 1
+            ;;
+        esac
+
+        echo "cli=$CLI" >> "$GITHUB_OUTPUT"
+        echo "auth=$AUTH" >> "$GITHUB_OUTPUT"
+
+        echo "vendor=$VENDOR -> cli=$CLI, auth=$AUTH"
+
+    - name: Install Agent CLI
+      shell: bash
+      env:
+        CLI: ${{ steps.resolve.outputs.cli }}
+      run: |
+        set -euo pipefail
+
+        case "$CLI" in
+          copilot) npm install -g @github/copilot ;;
+          claude)  npm install -g @anthropic-ai/claude-code ;;
+        esac
+
+    # Copilot CLI model ids are not published as a stable list; they are
+    # shown in the --model help text. Dumping them costs nothing and means
+    # a rejected id is self-diagnosing instead of a mystery failure.
+    - name: Show Available Models
+      if: steps.resolve.outputs.cli == 'copilot'
+      continue-on-error: true
+      shell: bash
+      env:
+        MODELS: ${{ inputs.models }}
+      run: |
+        set +e
+
+        copilot --version
+        copilot --help 2>&1 | sed -n '/--model/,/^[[:space:]]*$/p' \
+          > "$RUNNER_TEMP"/model-help.txt
+
+        echo "Candidate models for this run: $MODELS"
+        cat "$RUNNER_TEMP"/model-help.txt
+
+        {
+          echo "<details><summary>Copilot CLI model ids</summary>"
+          echo ""
+          echo "Candidates tried in order: \`$MODELS\`"
+          echo ""
+          echo '```'
+          cat "$RUNNER_TEMP"/model-help.txt
+          echo '```'
+          echo "</details>"
+        } >> "$GITHUB_STEP_SUMMARY"
+
+    - name: Show Claude Version
+      if: steps.resolve.outputs.cli == 'claude'
+      continue-on-error: true
+      shell: bash
+      env:
+        MODELS: ${{ inputs.models }}
+      run: |
+        set +e
+        claude --version
+        echo "Candidate models for this run: $MODELS"
+
+    # Read immediately before the walk and again immediately after it, rather
+    # than from the job's own start: what a caller's ledger row wants to know
+    # is what the session spent, and the npm install above varies by a minute
+    # for reasons that have nothing to do with the model.
+    - name: Mark Session Start
+      id: session-start
+      shell: bash
+      run: |
+        set -euo pipefail
+
+        echo "epoch=$(date +%s)" >> "$GITHUB_OUTPUT"
+
+    - name: ${{ inputs.step-label }}
+      id: run
+      shell: bash
+      env:
+        VENDOR: ${{ inputs.vendor }}
+        CLI: ${{ steps.resolve.outputs.cli }}
+        AUTH: ${{ steps.resolve.outputs.auth }}
+        PROMPT_FILE: ${{ inputs.prompt-file }}
+        MODELS: ${{ inputs.models }}
+        MAX_AI_CREDITS: ${{ inputs.max-ai-credits }}
+        MAX_TURNS: ${{ inputs.max-turns }}
+        CAPABILITY: ${{ inputs.capability }}
+        STEP_LABEL: ${{ inputs.step-label }}
+        # Both credentials are put in the environment; exactly one is left
+        # there at the point of invocation. See `invoke_claude`.
+        ANTHROPIC_API_KEY: ${{ inputs.api-key }}
+        CLAUDE_CODE_OAUTH_TOKEN: ${{ inputs.oauth-token }}
+      run: |
+        set -euo pipefail
+
+        if [ ! -f "$PROMPT_FILE" ]; then
+          echo "::error::Prompt file $PROMPT_FILE does not exist."
+          exit 1
+        fi
+
+        # The one place the two postures are reconciled. Read the two cases
+        # together: they must grant the same real capability, or a role
+        # changes behaviour when its label's vendor segment changes, which is
+        # the single thing this whole standardisation exists to prevent.
+        case "$CAPABILITY" in
+          read-only)
+            # Copilot: strip everything that can touch the checkout or spawn
+            # further agents. Claude: grant only the readers.
+            EXCLUDED_TOOLS="bash,powershell,apply_patch,create,edit,task,write_agent"
+            ALLOWED_TOOLS="Read,Grep,Glob"
+            ;;
+          write)
+            # Copilot: keep edit and shell, still no sub-agents. Claude:
+            # grant the writers and Bash, which the implementing roles need
+            # for the project's validation script and for `git commit`.
+            # Neither vendor gets
+            # a push here -- the workflow pushes, deliberately, so the commit
+            # a session made is inspected before it leaves the runner.
+            EXCLUDED_TOOLS="task,write_agent"
+            ALLOWED_TOOLS="Read,Grep,Glob,Edit,Write,Bash"
+            ;;
+          *)
+            echo "::error::Unknown capability '$CAPABILITY'. Expected 'read-only' or 'write'."
+            exit 1
+            ;;
+        esac
+
+        echo "capability=$CAPABILITY -> copilot excludes [$EXCLUDED_TOOLS]," \
+             "claude code allows [$ALLOWED_TOOLS]"
+
+        # One invocation function per vendor, one shared loop. The loop is
+        # the load-bearing part -- "advance only on model_unavailable" is the
+        # rule that keeps a real failure from being retried on a cheaper
+        # model -- so it must not be written twice.
+        #
+        # Each function leaves behind: agent-outcome.json (the shared
+        # schema), and whatever raw evidence its classifier needed.
+
+        invoke_copilot() {
+          local model="$1"
+          local status=0
+
+          # The prompt goes on stdin, NOT via -p "$(cat ...)": Linux caps a
+          # single argv element (MAX_ARG_STRLEN, 128 KiB), independently of
+          # the larger total ARG_MAX. A large diff-bearing prompt fails
+          # execve() with E2BIG before copilot even starts. Copilot CLI
+          # reads the prompt from stdin when -p is empty.
+          copilot \
+            -p "" \
+            --model "$model" \
+            --output-format json \
+            --no-ask-user \
+            --max-ai-credits "$MAX_AI_CREDITS" \
+            --allow-all-tools \
+            --excluded-tools "$EXCLUDED_TOOLS" \
+            < "$PROMPT_FILE" \
+            > "$RUNNER_TEMP"/copilot-output.jsonl 2> "$RUNNER_TEMP"/agent-error.txt || status=$?
+
+          echo "copilot exited $status"
+          echo "output: $(wc -c < "$RUNNER_TEMP"/copilot-output.jsonl) bytes of JSONL"
+
+          python3 .github/scripts/classify-copilot-outcome.py \
+            --jsonl "$RUNNER_TEMP"/copilot-output.jsonl \
+            --stderr "$RUNNER_TEMP"/agent-error.txt \
+            --exit-status "$status" \
+            --model "$model" \
+            --credit-limit "$MAX_AI_CREDITS" \
+            --out "$RUNNER_TEMP"/agent-outcome.json
+        }
+
+        invoke_claude() {
+          local model="$1"
+          local status=0
+
+          # Serves both Claude Code vendors. They must produce identical
+          # sessions -- same isolation, same tools, same model -- because the
+          # only sanctioned difference between `anthropic` and `claude` is
+          # which account is billed. Everything that varies below varies for
+          # that reason alone.
+          #
+          # Claude is pointed at the prompt file rather than fed it, for the
+          # same MAX_ARG_STRLEN reason as above and because `-p` with piped
+          # stdin combines the two in a way this harness would rather not
+          # depend on.
+          #
+          # ISOLATION. A CI session must not vary with whatever the checkout
+          # happens to configure: no hooks, no plugins, no MCP servers, no
+          # custom agents or commands, no auto memory, no CLAUDE.md. Two
+          # flags achieve that, and which one is usable is decided by auth,
+          # not by preference:
+          #
+          #   --bare       skips all of it AND restricts Anthropic auth to
+          #                ANTHROPIC_API_KEY (or an apiKeyHelper). Its own
+          #                --help is explicit that OAuth and the keychain are
+          #                "never read". So it is unusable on the `claude`
+          #                vendor -- not awkward, unusable.
+          #   --safe-mode  disables the same customizations, and leaves auth,
+          #                model selection, tools and permissions working
+          #                normally. That last clause is why the OAuth vendor
+          #                exists at all.
+          #
+          # Verified rather than assumed: asked, with no tools, whether
+          # CLAUDE.md was in context, `--safe-mode` answers NOT-LOADED and a
+          # plain run answers LOADED. The two flags isolate alike.
+          #
+          # `--strict-mcp-config` rides along on the --safe-mode path as a
+          # second lock on the one customization that could reach the
+          # network. It is redundant with --safe-mode today and costs
+          # nothing; --bare needs no equivalent.
+          #
+          # This is also what keeps `.claude/settings.json`'s `fallbackModel`
+          # chain out of the run, on both paths. That matters more than it
+          # looks: the `models` input above is this action's own fallback,
+          # per role rather than per session, and the same mechanism the
+          # Copilot side uses. A second fallback system silently overriding
+          # it would make `resolved-model` report an id that did not answer.
+          #
+          # CREDENTIALS. Exactly one is left in the environment. Callers pass
+          # both unconditionally -- deliberately, so that flipping a label
+          # never discovers a secret that was never threaded through -- which
+          # means both are present here even though this run may use either.
+          # Leaving the other in place would let the CLI pick, and the
+          # symptom of it picking wrong is a correct answer billed to the
+          # wrong account: invisible in the logs, visible on an invoice.
+          local -a auth_env isolation
+
+          if [ "$AUTH" = "oauth" ]; then
+            auth_env=(env -u ANTHROPIC_API_KEY)
+            isolation=(--safe-mode --strict-mcp-config)
+          else
+            auth_env=(env -u CLAUDE_CODE_OAUTH_TOKEN)
+            isolation=(--bare)
+          fi
+
+          # --add-dir "$RUNNER_TEMP" is load-bearing since #98 moved the
+          # prompt files out of the checkout. Claude is pointed at the prompt
+          # by PATH and opens it with its own Read tool, and that tool is
+          # scoped to the working directory -- which is the checkout
+          # (/home/runner/work/<repo>/<repo>), while $RUNNER_TEMP is a
+          # sibling (/home/runner/work/_temp). Without this the session
+          # cannot read its own prompt, and the failure looks like a model
+          # that ignored its instructions rather than a path it was refused.
+          #
+          # Both isolation modes permit it: --bare's own documentation names
+          # --add-dir among the ways to give a bare session context
+          # explicitly, and --safe-mode does not touch directory permissions.
+          # The Copilot branch needs no equivalent -- it feeds the prompt on
+          # stdin, which has no notion of a permitted directory.
+          "${auth_env[@]}" claude \
+            "${isolation[@]}" \
+            --add-dir "$RUNNER_TEMP" \
+            -p "Read $PROMPT_FILE and follow it exactly. It is the whole task." \
+            --model "$model" \
+            --output-format json \
+            --max-turns "$MAX_TURNS" \
+            --permission-mode dontAsk \
+            --allowedTools "$ALLOWED_TOOLS" \
+            > "$RUNNER_TEMP"/claude-output.json 2> "$RUNNER_TEMP"/agent-error.txt || status=$?
+
+          echo "claude exited $status (auth: $AUTH)"
+          echo "output: $(wc -c < "$RUNNER_TEMP"/claude-output.json) bytes of JSON"
+
+          # --vendor and --auth-mode are what let one classifier write
+          # guidance naming the right secret. They describe this run's
+          # configuration; nothing in the envelope reveals either.
+          python3 .github/scripts/classify-claude-outcome.py \
+            --json "$RUNNER_TEMP"/claude-output.json \
+            --stderr "$RUNNER_TEMP"/agent-error.txt \
+            --exit-status "$status" \
+            --model "$model" \
+            --vendor "$VENDOR" \
+            --auth-mode "$AUTH" \
+            --out "$RUNNER_TEMP"/agent-outcome.json
+        }
+
+        # Checked before the loop, not inside it. Without a credential every
+        # candidate fails identically, so walking the list would turn one
+        # missing secret into N identical failures and report the last one.
+        #
+        # Keyed on auth rather than on vendor: the question is which secret
+        # this run needs, and that is exactly what auth already answers.
+        MISSING_SECRET=""
+
+        case "$AUTH" in
+          api-key)
+            [ -n "${ANTHROPIC_API_KEY:-}" ] || MISSING_SECRET=ANTHROPIC_API_KEY
+            ;;
+          oauth)
+            [ -n "${CLAUDE_CODE_OAUTH_TOKEN:-}" ] \
+              || MISSING_SECRET=CLAUDE_CODE_OAUTH_TOKEN
+            ;;
+        esac
+
+        if [ -n "$MISSING_SECRET" ]; then
+          jq -n \
+            --arg secret "$MISSING_SECRET" \
+            --arg vendor "$VENDOR" \
+            '{reason:"harness_error",
+              headline:("No " + $secret + " reached this session"),
+              guidance:("The `" + $vendor + "` vendor authenticates with the " + $secret + " repository secret. A composite action cannot read `secrets` itself, so the caller must thread it through -- check that this workflow passes it to run-agent-session, and that the secret is set on the repository.")}' \
+            > "$RUNNER_TEMP"/agent-session-failure.json
+
+          echo "::error::vendor is '$VENDOR' but no $MISSING_SECRET reached" \
+               "this step. Pass secrets.$MISSING_SECRET through to" \
+               "run-agent-session."
+          exit 1
+        fi
+
+        resolved=""
+        last_reason=""
+
+        IFS=',' read -r -a candidates <<< "$MODELS"
+
+        for candidate in "${candidates[@]}"; do
+          model="$(echo "$candidate" | tr -d '[:space:]')"
+          [ -n "$model" ] || continue
+
+          echo "::group::$STEP_LABEL with $model ($VENDOR)"
+
+          case "$CLI" in
+            copilot) invoke_copilot "$model" ;;
+            claude)  invoke_claude  "$model" ;;
+          esac
+
+          reason="$(jq -r '.reason' "$RUNNER_TEMP"/agent-outcome.json)"
+          headline="$(jq -r '.headline' "$RUNNER_TEMP"/agent-outcome.json)"
+          guidance="$(jq -r '.guidance' "$RUNNER_TEMP"/agent-outcome.json)"
+
+          echo "::endgroup::"
+
+          last_reason="$reason"
+
+          if [ "$reason" = "model_unavailable" ]; then
+            echo "::warning::$headline. Trying the next candidate."
+            continue
+          fi
+
+          chars="$(jq -r '.assistant_text_chars' "$RUNNER_TEMP"/agent-outcome.json)"
+
+          # Anything that produced text goes forward, even a session that
+          # ended badly -- a run can trip its credit or turn cap and still
+          # return a whole answer. Whether what came back is *complete* is
+          # the caller's question (e.g. extract-review-verdict), asked once,
+          # in one place, using this outcome file.
+          if [ "$reason" = "completed" ] || [ "$chars" -gt 0 ]; then
+            resolved="$model"
+
+            if [ "$reason" != "completed" ]; then
+              echo "::warning::$headline, but it produced $chars characters" \
+                   "of output."
+            fi
+
+            break
+          fi
+
+          echo "::error::$headline"
+          echo "$guidance"
+
+          {
+            echo "### $STEP_LABEL failed: $reason"
+            echo ""
+            echo "$headline"
+            echo ""
+            echo "$guidance"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          cp "$RUNNER_TEMP"/agent-outcome.json "$RUNNER_TEMP"/agent-session-failure.json
+
+          exit 1
+        done
+
+        if [ -z "$resolved" ]; then
+          if [ "$CLI" = "claude" ]; then
+            GUIDANCE="Availability is resolved per account. Check the id spelling -- Claude Code ids use dashes (claude-opus-4-8), not the dotted Copilot form -- then set the relevant CLAUDE_*_MODELS repository variable."
+          else
+            GUIDANCE="Availability is resolved per identity. Check https://github.com/settings/copilot/features, then set the relevant COPILOT_*_MODELS repository variable."
+          fi
+
+          jq -n \
+            --arg guidance "$GUIDANCE" \
+            '{reason:"model_unavailable",
+              headline:"No candidate model was available",
+              guidance:$guidance}' \
+            > "$RUNNER_TEMP"/agent-session-failure.json
+
+          echo "::error::None of these models were available to the calling" \
+               "identity: $MODELS. (last reason: $last_reason)"
+          exit 1
+        fi
+
+        echo "resolved_model=$resolved" >> "$GITHUB_OUTPUT"
+        echo "resolved_vendor=$VENDOR" >> "$GITHUB_OUTPUT"
+
+    # The other half of `duration-seconds`. Under `always()` for the same
+    # reason "Report Session Cost" below is: the walk exits non-zero on a real
+    # failure and on the path where no candidate was available, and those are
+    # exactly the runs whose duration a caller's ledger row wants.
+    #
+    # Purely additive. It reads two clocks and writes one output; no step
+    # above it changes, and a caller that ignores the output sees the same
+    # action it saw before.
+    - name: Measure Session Duration
+      id: duration
+      if: always()
+      shell: bash
+      env:
+        STARTED_AT: ${{ steps.session-start.outputs.epoch }}
+        STEP_LABEL: ${{ inputs.step-label }}
+      run: |
+        set -euo pipefail
+
+        # An empty or non-numeric start means "Mark Session Start" never ran
+        # -- an unknown vendor, a failed CLI install. Zero rather than blank,
+        # because this output is contracted to be a non-negative integer on
+        # every path, and a session that never started did take no measurable
+        # session time.
+        case "${STARTED_AT:-}" in
+          ''|*[!0-9]*)
+            SPENT=0
+            ;;
+          *)
+            SPENT=$(( $(date +%s) - STARTED_AT ))
+            # The runner's clock is not guaranteed monotonic across a step
+            # boundary, and a negative duration would be read as a corrupt
+            # ledger row rather than as a clock adjustment.
+            [ "$SPENT" -ge 0 ] || SPENT=0
+            ;;
+        esac
+
+        echo "duration_seconds=$SPENT" >> "$GITHUB_OUTPUT"
+        echo "$STEP_LABEL took ${SPENT}s across the model-preference walk."
+
+    # What the session cost, on the run's own summary page.
+    #
+    # The outcome file already carried this and nothing rendered it, so the
+    # only way to answer "what is the reviewer costing us" was to reconstruct
+    # it from the Console afterwards. A workflow that spends money should say
+    # what it spent, next to the run that spent it.
+    #
+    # The two vendors report different things and this does not pretend
+    # otherwise: `claude -p --output-format json` returns `total_cost_usd`,
+    # an actual figure for that session, while Copilot CLI reports no spend at
+    # all -- only the credit cap it was given. Showing the cap as though it
+    # were a cost would be worse than showing nothing.
+    - name: Report Session Cost
+      if: always()
+      shell: python
+      env:
+        STEP_LABEL: ${{ inputs.step-label }}
+      run: |
+        import json
+        import os
+        import pathlib
+
+        # This step\'s scratch lives in $RUNNER_TEMP, not the working
+        # tree -- see the note on `outputs` above.
+        SCRATCH = pathlib.Path(os.environ["RUNNER_TEMP"])
+
+        outcome_path = SCRATCH / "agent-outcome.json"
+
+        if not outcome_path.exists():
+            raise SystemExit(0)
+
+        try:
+            outcome = json.loads(outcome_path.read_text())
+        except json.JSONDecodeError:
+            raise SystemExit(0)
+
+        if not isinstance(outcome, dict):
+            raise SystemExit(0)
+
+        vendor = outcome.get("vendor") or "unknown"
+        model = outcome.get("model") or "unknown"
+        reason = outcome.get("reason") or "unknown"
+        chars = outcome.get("assistant_text_chars")
+        label = os.environ.get("STEP_LABEL") or "Session"
+
+        cost = outcome.get("total_cost_usd")
+
+        if isinstance(cost, (int, float)):
+            spend = f"${cost:.4f}"
+        elif vendor == "copilot":
+            cap = outcome.get("credit_limit")
+            # A cap, not a spend. Said so explicitly rather than printed bare.
+            spend = f"no spend reported (cap {cap})" if cap else "no spend reported"
+        else:
+            spend = "no spend reported"
+
+        line = (
+            f"- **{label}** · `{vendor}` · `{model}` · {reason} · {spend}"
+            + (f" · {chars} chars" if isinstance(chars, int) else "")
+        )
+
+        print(line)
+
+        summary = os.environ.get("GITHUB_STEP_SUMMARY")
+
+        if summary:
+            with open(summary, "a") as handle:
+                handle.write(line + "\n")
+
+    # Runs even when the step above failed, so a truncated or budget-capped
+    # session's partial text is still available to whatever the caller's
+    # own failure-reporting does with it.
+    - name: Extract Assistant Text
+      if: always()
+      shell: python
+      env:
+        # The CLI, not the vendor: what shape the raw evidence has is a
+        # property of which program wrote it. `anthropic` and `claude` both
+        # leave behind one claude-output.json envelope.
+        CLI: ${{ steps.resolve.outputs.cli }}
+      run: |
+        import json
+        import os
+        import pathlib
+
+        # This step\'s scratch lives in $RUNNER_TEMP, not the working
+        # tree -- see the note on `outputs` above.
+        SCRATCH = pathlib.Path(os.environ["RUNNER_TEMP"])
+
+        cli = os.environ["CLI"]
+        parts = []
+
+        if cli == "copilot":
+            jsonl = SCRATCH / "copilot-output.jsonl"
+
+            if jsonl.exists():
+                for raw_line in jsonl.read_text(errors="replace").splitlines():
+                    raw_line = raw_line.strip()
+
+                    if not raw_line:
+                        continue
+
+                    try:
+                        event = json.loads(raw_line)
+                    except json.JSONDecodeError:
+                        continue
+
+                    if event.get("type") != "assistant.message":
+                        continue
+
+                    content = (event.get("data") or {}).get("content")
+
+                    if isinstance(content, str):
+                        parts.append(content)
+                    elif isinstance(content, list):
+                        for block in content:
+                            if isinstance(block, dict) and block.get("type") == "text":
+                                parts.append(block.get("text", ""))
+
+        elif cli == "claude":
+            # One envelope, one answer. `.result` carries the final text --
+            # and on an in-run failure Claude Code puts the failure message
+            # there too, which is why it is still worth writing out on a
+            # failed run rather than only on a clean one.
+            envelope = SCRATCH / "claude-output.json"
+
+            if envelope.exists():
+                raw = envelope.read_text(errors="replace").strip()
+
+                if raw:
+                    try:
+                        loaded = json.loads(raw)
+                    except json.JSONDecodeError:
+                        loaded = None
+
+                    if isinstance(loaded, dict):
+                        result = loaded.get("result")
+
+                        if isinstance(result, str) and result.strip():
+                            parts.append(result)
+
+        text = "\n".join(parts).strip()
+        (SCRATCH / "agent-assistant-text.txt").write_text(text + "\n")
+
+        # The last assistant message is the Completion Report for the roles
+        # that end with one. Everything before it is the session thinking out
+        # loud, which is useful in a log and noise in a pull request body.
+        #
+        # Falls back to the joined text rather than emitting nothing: a
+        # capped session can be cut off mid-stream, and partial text is still
+        # better than a blank report -- the same reasoning as the
+        # `if: always()` on this step.
+        final = ""
+
+        for part in reversed(parts):
+            if part.strip():
+                final = part.strip()
+                break
+
+        (SCRATCH / "agent-final-text.txt").write_text((final or text) + "\n")
