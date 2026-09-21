@@ -88,7 +88,7 @@ examples/              The production system it was distilled from.
 
 ### The rules
 
-Ten groups, ~70 rules, each with **why**, **fails as**, and **verify**:
+Ten groups, 76 rules, each with **why**, **fails as**, and **verify**:
 
 `DEC` decomposition · `CAP` capability · `CTX` context · `HND` handoff ·
 `DSP` dispatch and state · `SES` session execution · `OUT` outcome and verdict ·
@@ -138,7 +138,7 @@ triggered yet" for as long as it takes someone to guess.
 | | |
 | --- | --- |
 | ✅ | The architecture: model, components, substrate capabilities and degradations, interfaces, conformance |
-| ✅ | ~70 rules, each with why / fails-as / verify, and a self-assessment |
+| ✅ | 76 rules, each with why / fails-as / verify, and a self-assessment |
 | ✅ | Field notes behind every rule group |
 | ✅ | Build guide and substrate worksheet |
 | ✅ | Realizations: tier 0 (shell + files), Jira + Jenkins, GitHub Actions (working files) |

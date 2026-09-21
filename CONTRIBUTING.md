@@ -57,7 +57,7 @@ in [`docs/rationale/`](docs/rationale/).
 5. If it changes a component's contract, update
    [`docs/architecture/01-components.md`](docs/architecture/01-components.md).
 
-Before adding one, try to fold it into an existing rule. Seventy rules is
+Before adding one, try to fold it into an existing rule. Seventy-six rules is
 close to the limit of what anyone will read; a new group needs to earn itself.
 
 ## Adding a realization
