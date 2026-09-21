@@ -1,4 +1,9 @@
-# The pipeline, in one page
+# Field notes: the pipeline in one page
+
+> *Field notes.* This directory explains **why** each rule exists — the failure
+> it came from. The rules themselves are in [`../../RULES.md`](../../RULES.md);
+> the architecture is in [`../architecture/`](../architecture/). Read those
+> first if you want the specification; read these if you want the evidence.
 
 An agent development pipeline is four roles, run as **four separate sessions**,
 handing each other **durable artifacts**.
@@ -72,8 +77,9 @@ you something false.
 | --- | --- |
 | [`08-session-outcomes.md`](08-session-outcomes.md) | How do you tell "the model finished and said no" from "the model ran out of budget"? |
 | [`09-quality-gates.md`](09-quality-gates.md) | How do you stop an agent from deleting the failing test? |
-| [`../porting/reference-architecture.md`](../porting/reference-architecture.md) | What are the platform primitives this needs? |
-| [`../porting/platform-mapping.md`](../porting/platform-mapping.md) | What does this look like on Jira + Jenkins? |
+| [`../architecture/01-components.md`](../architecture/01-components.md) | What are the components, and what may each one know? |
+| [`../architecture/02-substrate.md`](../architecture/02-substrate.md) | What does this need from my stack — and what if I have none of it? |
+| [`../realizations/jira-jenkins.md`](../realizations/jira-jenkins.md) | What does this look like on Jira + Jenkins? |
 
 ## What this is *not*
 

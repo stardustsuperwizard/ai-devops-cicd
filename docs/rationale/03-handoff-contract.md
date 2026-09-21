@@ -1,5 +1,12 @@
 # The handoff contract
 
+> *Field notes.* This page explains **why** a rule exists — the failure it
+> came from. The rule itself is normative and lives in
+> [`../../RULES.md`](../../RULES.md); the architecture it serves is in
+> [`../architecture/`](../architecture/).
+>
+> **Rules this justifies:** HND-1 … HND-6.
+
 Each stage runs in its own session. No stage sees the previous stage's
 reasoning. So the handoff has to be an **artifact a cold session can read**,
 and the pipeline is only as good as that artifact.
@@ -87,7 +94,7 @@ do not.
 | Change proposal | Pull request | Branch + PR in the SCM | Merge request |
 | Verdict | PR comment + label | Jira comment + status field | MR note + label |
 
-See [`../porting/platform-mapping.md`](../porting/platform-mapping.md) for the
+See [`../realizations/jira-jenkins.md`](../realizations/jira-jenkins.md) for the
 full mapping and the primitives each one has to supply.
 
 ## Tool-agnostic by construction

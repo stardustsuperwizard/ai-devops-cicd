@@ -1,8 +1,9 @@
-# Porting worksheet
+# Substrate worksheet
 
 Copy this file into your project and fill it in **before writing any code**.
-Phase 0 of [`build-guide-for-agents.md`](build-guide-for-agents.md) is
-complete when every row has an answer and every gap has a named degradation.
+Phase 0 of [`build-guide.md`](build-guide.md) is complete when every row has an
+answer and every gap has a named degradation from
+[`../architecture/02-substrate.md`](../architecture/02-substrate.md#degradations).
 
 An unanswered row is a decision you will make by accident later.
 
@@ -18,18 +19,18 @@ An unanswered row is a decision you will make by accident later.
 | SCM | |
 | Filled in by / date | |
 
-## The eight primitives
+## The eight capabilities
 
 | # | Primitive | Our implementation | Present? | Degradation if not |
 | --- | --- | --- | --- | --- |
-| P1 | Work item | | ☐ | |
-| P2 | Hierarchy (parent ↔ child) | | ☐ | |
-| P3 | Dependency ("A blocks B"), queryable | | ☐ | |
-| P4 | Mutable marker | | ☐ | |
-| P5 | Marker-change event | | ☐ | |
-| P6 | Session runner | | ☐ | |
-| P7 | Change proposal | | ☐ | |
-| P8 | Durable comment | | ☐ | |
+| S1 | Work item | | ☐ | |
+| S2 | Hierarchy (parent ↔ child) | | ☐ | |
+| S3 | Dependency ("A blocks B"), queryable | | ☐ | |
+| S4 | Mutable marker | | ☐ | |
+| S5 | Marker-change event | | ☐ | |
+| S6 | Session runner | | ☐ | |
+| S7 | Change proposal | | ☐ | |
+| S8 | Durable comment | | ☐ | |
 
 ### The two questions that are never obvious
 
@@ -38,27 +39,27 @@ An unanswered row is a decision you will make by accident later.
 > Answer:
 
 If no, the pipeline is not operable from a phone, and that is the property
-that makes marker-driven dispatch worth building. Reconsider P4 before
-continuing.
+that makes marker-driven dispatch worth building. Reconsider S4 before continuing (**DSP-1**).
 
-**Can the CI identity push to CI configuration?**
+**What may your automation identity not do?** (**HUM-4**)
 
 > Answer:
 
-If no, tasks touching CI config are undispatchable by any automated path.
-Plan-time detection (the 🔑 flag) must exist from the start, and the
-*Ready to dispatch* bucket's instruction is wrong for those tasks.
+There is always something — usually modifying its own configuration. That work
+is undispatchable by any automated path, so plan-time detection must exist from
+the start; otherwise the *ready to dispatch* instruction is wrong for exactly
+the items where being wrong is most expensive.
 
-## Vendors
+## Runtimes
 
-| vendor name | CLI | credential | billed to | budget unit |
+| runtime name | program | credential | billed to | budget unit |
 | --- | --- | --- | --- | --- |
 | | | | | |
 | | | | | |
 
-Ship phase 3 with one vendor and phase 4 with the second. If you will only
-ever have one, **still build the `vendor` input** — the cost is one case
-statement and it is the seam that keeps the rest vendor-blind.
+Ship phase 3 with one runtime and phase 4 with the second. If you will only
+ever have one, **still build the runtime parameter** — it costs one branch in
+one file, and it is the seam that keeps everything above it blind (**SES-1**).
 
 ## Model tiers
 
@@ -111,13 +112,13 @@ Anything added? Anything dropped, and why?
 
 | | Read-only | Write |
 | --- | --- | --- |
-| Vendor A flags | | |
-| Vendor B flags | | |
+| Runtime A flags | | |
+| Runtime B flags | | |
 
-Is each harness **additive** or **subtractive**?
+Is each runtime **additive** or **subtractive**? (**CAP-3**)
 
-> Vendor A:
-> Vendor B:
+> Runtime A:
+> Runtime B:
 
 Getting this wrong produces a session that runs, does nothing, and looks
 exactly like a model that underperformed.
@@ -150,8 +151,9 @@ re-run the job", confirm the failure message says so.)
 
 ## Toolchain adapter
 
-The language/engine-specific commands. Everything above should call these,
-never the tool directly.
+The language- and tool-specific commands. Every component above calls these,
+never the tool. Drawing this boundary on day one is what makes the rest of the
+pipeline portable; retrofitting it is a rewrite.
 
 | Operation | Command | Notes |
 | --- | --- | --- |
@@ -172,16 +174,18 @@ conflicts.) These earn the ⚠️ flag at plan time.
 
 ## Invariant check
 
-Confirm the port holds all seven, from
-[`reference-architecture.md`](reference-architecture.md#invariants--do-not-trade-these-away):
+Confirm the build holds the load-bearing six, from
+[`../../RULES.md`](../../RULES.md#conformance):
 
-- [ ] Each role is a separate session
-- [ ] Constraints are capabilities removed, not instructions added
-- [ ] The handoff is an artifact a cold session can read
-- [ ] Control-plane state is derived, never stored twice
-- [ ] Vendor differences live in exactly one file
-- [ ] A truncated session never publishes a verdict
-- [ ] Model spend on a new decision requires a human tap
+- [ ] **DEC-1** Roles are lifecycle stages, not disciplines
+- [ ] **DEC-2** Each role runs as its own session
+- [ ] **CAP-1** Constraints are capabilities removed, not instructions added
+- [ ] **CTX-1** Isolation is enforced by not fetching
+- [ ] **HND-1** Every stage boundary is a durable artifact
+- [ ] **HND-3** Work items pass the cold-start test
+
+Then run the full self-assessment in
+[`../architecture/04-conformance.md`](../architecture/04-conformance.md).
 
 Any box unchecked, name it and say why it was traded:
 

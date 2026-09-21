@@ -1,5 +1,12 @@
 # Quality gates: stopping the cheapest way to green
 
+> *Field notes.* This page explains **why** a rule exists — the failure it
+> came from. The rule itself is normative and lives in
+> [`../../RULES.md`](../../RULES.md); the architecture it serves is in
+> [`../architecture/`](../architecture/).
+>
+> **Rules this justifies:** GAT-1 … GAT-11, HUM-2.
+
 An agent optimises for the check going green. Every gate below exists because
 there is a cheap, wrong way to achieve that, and a human reviewer will not
 reliably catch it in a large diff.

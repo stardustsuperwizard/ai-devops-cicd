@@ -1,5 +1,12 @@
 # State markers and trigger markers
 
+> *Field notes.* This page explains **why** a rule exists — the failure it
+> came from. The rule itself is normative and lives in
+> [`../../RULES.md`](../../RULES.md); the architecture it serves is in
+> [`../architecture/`](../architecture/).
+>
+> **Rules this justifies:** DSP-1 … DSP-10.
+
 Every stage starts because a **marker was added to a work item**. On GitHub
 that marker is a label; on Jira a status transition or a field; on any
 tracker, some small mutable attribute a person can set from a phone.

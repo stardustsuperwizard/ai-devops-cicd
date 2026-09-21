@@ -1,5 +1,12 @@
 # Derived state: a control plane that cannot drift
 
+> *Field notes.* This page explains **why** a rule exists — the failure it
+> came from. The rule itself is normative and lives in
+> [`../../RULES.md`](../../RULES.md); the architecture it serves is in
+> [`../architecture/`](../architecture/).
+>
+> **Rules this justifies:** OBS-1 … OBS-5, GAT-10.
+
 The control plane is a generated, pinned document that answers the one thing a
 saved view cannot: **what is unblocked right now, grouped by epic, in
 dependency order.**

@@ -1,20 +1,31 @@
 # Build guide
 
-A session-by-session plan for building this framework on a new platform. It is
-written so that an agent session can execute one numbered phase per session,
-with a durable artifact at every boundary — which is, not coincidentally, the
-same property the framework itself is built on.
+A phase-by-phase plan for building this architecture on whatever substrate you
+have. Each phase is small enough for one working session, ends in a durable
+artifact, and has a done-test you can run — which is, not coincidentally, the
+property the architecture itself is built on.
+
+It is written to be executed by a person or by an agent session, one phase at
+a time.
 
 **Before starting, read:**
-[`reference-architecture.md`](reference-architecture.md) for the components,
-[`platform-mapping.md`](platform-mapping.md) for your platform's primitives,
-and [`../concepts/02-capability-removal.md`](../concepts/02-capability-removal.md)
-— if you read only one concept doc, read that one.
+[`../architecture/00-the-model.md`](../architecture/00-the-model.md) for the
+entities and the pipeline,
+[`../architecture/01-components.md`](../architecture/01-components.md) for the
+component contracts, and
+[`../../RULES.md`](../../RULES.md) for what must hold. If you read one page of
+rationale, make it
+[`../rationale/02-capability-removal.md`](../rationale/02-capability-removal.md).
 
-**Fill in [`worksheet.md`](worksheet.md) first.** Every phase below refers to
-answers in it. A port that starts coding before the worksheet is filled in
-will get to phase 4 and discover its marker primitive cannot be set from a
-phone.
+**Fill in [`worksheet.md`](worksheet.md) first.** Every phase refers to
+answers in it. A build that starts coding before the worksheet is filled in
+reaches phase 4 and discovers its marker primitive cannot be set without admin
+rights.
+
+**Build [tier 0](../architecture/02-substrate.md#tier-0--the-minimal-realization)
+first if you are unsure of anything.** It is the whole control plane in forty
+lines of shell, it conforms, and confirming the shape there costs an afternoon
+rather than a sprint.
 
 ---
 
@@ -25,15 +36,17 @@ phone.
 Do not skip this because the answers seem obvious. The two that are never
 obvious:
 
-- **Which primitive carries the trigger marker**, and whether a non-admin can
-  set it from a mobile client. If they cannot, the pipeline is not operable
-  and you will discover that months in.
-- **Whether your CI identity can push to CI configuration.** On most
-  platforms it cannot. That makes an entire class of task undispatchable, and
-  the plan-time detection for it (🔑) has to exist from the start.
+- **Which primitive carries the trigger marker** (**DSP-1**), and whether a
+  non-admin can set it from a mobile client in two taps. If they cannot, the
+  pipeline is not operable, and you find that out months in.
+- **What your automation identity may not do** (**HUM-4**). There is always
+  something — usually modifying its own configuration. That set defines a
+  class of work no automated path can perform, and it has to be detectable at
+  plan time rather than at dispatch.
 
-**Done when:** every row of the worksheet is filled, and every "missing"
-primitive has a named degradation from the reference architecture.
+**Done when:** every row of the worksheet is filled, and every missing
+capability has a named degradation from
+[`../architecture/02-substrate.md`](../architecture/02-substrate.md#degradations).
 
 ---
 
@@ -75,7 +88,7 @@ Nothing fires and nothing says why. This phase exists because of that silence.
 
 ## Phase 2 — The echo job
 
-**Output:** adding one marker reliably produces a CI run that prints the item
+**Output:** setting one marker reliably produces one run that prints the item
 ID, and the marker is gone afterwards.
 
 Nothing else. No model, no prompt, no checkout.
@@ -95,7 +108,7 @@ free.
 ## Phase 3 — The session runner (C3)
 
 **Output:** one component, one vendor, meeting the full contract in
-[`reference-architecture.md`](reference-architecture.md#c3--session-runner).
+[`../architecture/01-components.md`](../architecture/01-components.md#c3--run-session).
 
 Build it with these inputs from the start, even with one vendor — retrofitting
 them later means rewriting every caller:
@@ -110,7 +123,7 @@ final-message-only text, outcome JSON, duration, cost, failure JSON.
 1. **Capability, negative case.** Run a `read-only` session with a prompt that
    asks it to write a file. Assert the file does not exist. If it does, your
    capability knob is decorative — which is the failure mode in
-   [`../concepts/02-capability-removal.md`](../concepts/02-capability-removal.md),
+   [`../rationale/02-capability-removal.md`](../rationale/02-capability-removal.md),
    and the additive/subtractive trap is the likely cause.
 2. **Preference-list walk.** Put a deliberately invalid model ID first. Assert
    the run succeeds on the second entry, and that the log names the rejected
@@ -156,9 +169,9 @@ Build:
 
 - **C2** fetching *only* the diff, the task item, and the acceptance criteria.
   **Explicitly do not fetch the proposal's description** — see
-  [`../concepts/04-context-isolation.md`](../concepts/04-context-isolation.md).
+  [`../rationale/04-context-isolation.md`](../rationale/04-context-isolation.md).
 - **C4**, the outcome classifier, per
-  [`../concepts/08-session-outcomes.md`](../concepts/08-session-outcomes.md).
+  [`../rationale/08-session-outcomes.md`](../rationale/08-session-outcomes.md).
   Classify from harness evidence only.
 - **C5**, the verdict extractor, with the truncation gate.
 
@@ -229,7 +242,7 @@ branch.
 
 ## Phase 9 — Quality gates
 
-Per [`../concepts/09-quality-gates.md`](../concepts/09-quality-gates.md), in
+Per [`../rationale/09-quality-gates.md`](../rationale/09-quality-gates.md), in
 this order — each is independently useful, so ship them one at a time:
 
 1. **Test ratchet** (easiest, catches the most common cheat)
@@ -251,7 +264,7 @@ Build the renderer as a **local script first**, with a `--json` mode. Wire it
 to CI second. A renderer you cannot run locally is a renderer you cannot test.
 
 Get the ordering right —
-[`../concepts/07-derived-state.md`](../concepts/07-derived-state.md) — and
+[`../rationale/07-derived-state.md`](../rationale/07-derived-state.md) — and
 clear the button unconditionally, even on failure.
 
 **Done when:** `render --json` against the live tracker produces the same

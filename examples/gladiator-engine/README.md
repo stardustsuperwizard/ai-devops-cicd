@@ -5,7 +5,7 @@ The control plane this repository was extracted from, running in production:
 
 A turn-based hex-grid combat rules engine in Godot. The game is not the point
 — it is the **worked instantiation** of everything in
-[`../../docs/concepts/`](../../docs/concepts/), including the parts that are
+[`../../docs/rationale/`](../../docs/rationale/), including the parts that are
 specific to one engine and therefore cannot be templated.
 
 ## What to look at, and why

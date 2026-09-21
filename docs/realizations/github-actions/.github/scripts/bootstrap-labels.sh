@@ -59,7 +59,7 @@ plan|0E8A16|Intake Issue awaiting decomposition into Implementation Tasks
 planned|0E8A16|Intake Issue that has been decomposed
 implementation|1D76DB|Implementation Task Issue, ready for an implementer
 # Model tier, set by the planner per task and read by the implementer
-# workflow. A TIER, never a model id -- see docs/concepts/05-model-tiering.md.
+# workflow. A TIER, never a model id -- see docs/rationale/05-model-tiering.md.
 model:haiku|C5DEF5|Model tier: work fully determined by the contract
 model:sonnet|C5DEF5|Model tier: the default, and the answer when unsure
 model:opus|C5DEF5|Model tier: a wrong choice here is expensive to undo

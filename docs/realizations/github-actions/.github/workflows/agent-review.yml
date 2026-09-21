@@ -17,7 +17,7 @@ name: Agent - PR Review
 #
 # TO ADAPT THIS TEMPLATE, search for TODO.
 #
-# See docs/porting/build-guide-for-agents.md, phase 5.
+# See docs/building/build-guide.md, phase 5.
 
 on:
   # Fires without a tap: review is a safety net on work you already chose to
@@ -125,7 +125,7 @@ jobs:
       # account rather than the diff.
       #
       # This is enforced by not fetching, never by an instruction to disregard.
-      # See docs/concepts/04-context-isolation.md.
+      # See docs/rationale/04-context-isolation.md.
       #
       # TODO: replace this inline step with a composite action once you have a
       # second caller (an implementer's pre-PR self-review is the usual one).
@@ -205,7 +205,7 @@ jobs:
       # `capability: read-only` is the whole reason a reviewer cannot quietly
       # fix what it finds. It is a semantic knob, encoded per vendor inside
       # the action -- callers never pass tool flags.
-      # See docs/concepts/02-capability-removal.md.
+      # See docs/rationale/02-capability-removal.md.
       - name: Run Review Session
         id: session
         uses: ./.github/actions/run-agent-session

@@ -1,5 +1,12 @@
 # Capability removal
 
+> *Field notes.* This page explains **why** a rule exists — the failure it
+> came from. The rule itself is normative and lives in
+> [`../../RULES.md`](../../RULES.md); the architecture it serves is in
+> [`../architecture/`](../architecture/).
+>
+> **Rules this justifies:** CAP-1, CAP-2, CAP-3, CAP-4, CAP-5, CTX-1.
+
 **The fix is not better prose. It is removing the capability.**
 
 This is the most load-bearing finding in the framework, and it is worth

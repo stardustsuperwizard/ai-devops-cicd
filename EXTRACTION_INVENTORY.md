@@ -1,7 +1,12 @@
 # Extraction inventory
 
-Every file in the source control plane (`stardustsuperwizard/gladiator-engine`),
-classified by how much of it transfers, with a port order.
+Working notes, not architecture. Every file in the source control plane
+(`stardustsuperwizard/gladiator-engine`) classified by how much of it
+transfers, so the remaining extraction can be planned.
+
+The architecture is in [`docs/architecture/`](docs/architecture/) and the rules
+in [`RULES.md`](RULES.md); this page only tracks what has and has not been
+mined out of one production system.
 
 **Source survey date:** 2026-09-21. **Total surveyed:** ~38,400 lines across
 84 files.
@@ -27,10 +32,10 @@ workflows call those rather than the tools. The port inherits that seam.
 
 | | |
 | --- | --- |
-| ✅ | Ported into `templates/` in this pass |
-| 📄 | Reasoning extracted into `docs/concepts/` or `docs/porting/` |
+| ✅ | Realized in `docs/realizations/github-actions/` |
+| 📄 | Reasoning extracted into `docs/rationale/`, and distilled into `RULES.md` |
 | ⬜ | Not yet ported |
-| 🎮 | Godot-specific — belongs in `examples/`, not `templates/` |
+| 🎮 | Godot-specific — belongs in `examples/`, not in a realization |
 | ❌ | Not worth porting |
 
 ---
@@ -96,9 +101,9 @@ These need no genericization beyond a comment or two.
 
 ## Tier 3 — toolchain adapter boundary (🎮 example only)
 
-Per your decision: **kept as an example, no formal adapter contract.** These
-stay in `examples/gladiator-engine/` and are what a consumer reads to see how
-the seam was drawn.
+**Kept as an example, with no formal adapter contract.** These stay in
+`examples/gladiator-engine/` and are what a reader looks at to see where the
+seam was drawn.
 
 | File | Lines | Matches |
 | --- | --- | --- |
@@ -124,10 +129,10 @@ doing on its own.
 
 | File | Lines | Extracted into | Status |
 | --- | --- | --- | --- |
-| `docs/AGENT_WORKFLOW.md` | 2,548 | `concepts/00`, `02`, `05`, `06`, `07`, `08`; `porting/reference-architecture` | 📄 partial |
-| `AGENTS.md` | 597 | `concepts/03`; repo-conventions pattern still ⬜ | 📄 partial |
-| `docs/AGENT_ROLE_DESIGN.md` | 239 | `concepts/01-role-design.md` | 📄 done |
-| `docs/RUN_LEDGER.md` | 82 | Measurement section of `concepts/05` | 📄 partial |
+| `docs/AGENT_WORKFLOW.md` | 2,548 | `rationale/00,02,05,06,07,08`; **RULES.md** CAP/SES/OUT/DSP/OBS | 📄 partial |
+| `AGENTS.md` | 597 | `rationale/03`; **RULES.md** HND; repo-conventions pattern still ⬜ | 📄 partial |
+| `docs/AGENT_ROLE_DESIGN.md` | 239 | `rationale/01-role-design.md`; **RULES.md** DEC | 📄 done |
+| `docs/RUN_LEDGER.md` | 82 | `rationale/05`; **RULES.md** OBS-6; interface I5 | 📄 partial |
 | `docs/RELEASING.md` | 96 | Not yet | ⬜ |
 
 `AGENT_WORKFLOW.md` is the source's crown jewel and is only partly mined. Four
@@ -158,7 +163,7 @@ is not portable. Filed under *Next up*, below.
 ## Port order
 
 Each step is independently useful and independently verifiable. This is also
-the order [`docs/porting/build-guide-for-agents.md`](docs/porting/build-guide-for-agents.md)
+the order [`docs/building/build-guide.md`](docs/building/build-guide.md)
 recommends building from scratch, which is not a coincidence.
 
 | # | Work | Files | Unlocks |
@@ -182,13 +187,13 @@ valuable and can be reordered freely.
 
 ## Next up (documentation gaps, not ports)
 
-- `concepts/10-local-parity.md` — running the same roles from a desktop or
+- `rationale/10-local-parity.md` — running the same roles from a desktop or
   mobile agent session, and the `gh` vs. MCP dual-call-site pattern
-- `concepts/11-measurement.md` — the run ledger: what to record per session and
+- `rationale/11-measurement.md` — the run ledger: what to record per session and
   what it tells you
-- `concepts/12-spec-traceability.md` — machine-checkable spec↔code links
-- `templates/jenkins/` — the shared-library form of C3, sketched in
-  [`docs/porting/platform-mapping.md`](docs/porting/platform-mapping.md)
+- `rationale/12-spec-traceability.md` — machine-checkable spec↔code links
+- `docs/realizations/jenkins/` — working shared-library code for C3, currently
+  only sketched in [`docs/realizations/jira-jenkins.md`](docs/realizations/jira-jenkins.md)
 
 ## Re-running this survey
 

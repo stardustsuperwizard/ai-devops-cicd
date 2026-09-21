@@ -1,54 +1,93 @@
 # Contributing
 
-This repository collects infrastructure and AI-agent-development work extracted
-from real projects. Two rules keep it useful.
+This repository is an **architectural guide and rule set**. Code here is
+evidence, never the product. Three rules keep it that way.
 
-## 1. Nothing goes in `docs/concepts/` that is not platform-agnostic
+## 1. Nothing in `docs/architecture/` or `RULES.md` names a product
 
-A concepts page describes a mechanism in terms of **work items, markers,
-sessions and artifacts** — never Issues, labels, Actions or `gh`. If you cannot
-write it without naming a vendor, it belongs in `templates/` or `examples/`.
+The architecture is stated in **work items, markers, sessions, artifacts and
+substrates** — never Issues, labels, pipelines, `gh`, or any vendor's name.
 
-Test: could someone building on Jira + Jenkins follow it? If not, rewrite or
-move it.
+Test: could someone on a stack you have never heard of follow it? Could
+someone with no stack at all — a shell and a directory — follow it? If not,
+rewrite it, or move it to [`docs/realizations/`](docs/realizations/).
 
-## 2. Every claim names the failure it came from
+A rule that can only be obeyed on one platform is not a rule. It is a
+realization detail.
 
-The value here is not the architecture — it is knowing which parts were
-learned the expensive way. When you add a rule, say what breaks without it.
+## 2. Every rule names the failure it came from
+
+The value here is not the architecture. It is knowing which parts were learned
+the expensive way.
 
 > The fix is not better prose. It is removing the capability.
 
 reads differently from "prefer tool restrictions", and the difference is the
-sentence before it explaining what happened when prose was tried.
+sentence before it saying what happened when prose was tried.
 
-Avoid: "best practice", "consider", "it is recommended". Say what failed.
+Avoid "best practice", "consider", "it is recommended". Say what broke.
 
-## Adding an extraction
+## 3. A rule is not a rule unless it can be checked
 
-1. Survey the source and update [`EXTRACTION_INVENTORY.md`](EXTRACTION_INVENTORY.md)
-   — tier, line count, coupling, status.
-2. Extract the **reasoning** into `docs/concepts/` first. The code without the
-   reasoning is a snippet; the reasoning without the code is still useful.
-3. Then the code into `templates/<platform>/`, with project-specific references
-   genericized and every seam marked `TODO`.
-4. Link the original in `examples/<project>/README.md` so a reader can see it
-   working.
+Every entry in [`RULES.md`](RULES.md) carries four parts:
 
-## Templates
+| | |
+| --- | --- |
+| **Statement** | MUST / SHOULD / MAY, in one sentence |
+| **Why** | The property it protects |
+| **Fails as** | What you actually observe when it is broken — usually not an error |
+| **Verify** | How to check, without trusting anyone's word |
 
-- Must be **copy-pasteable** — no repo-relative `uses:` paths that only resolve
-  here.
-- Must mark every seam a consumer edits with `TODO`.
-- Must be syntax-valid. YAML parses, Python compiles, `bash -n` passes.
-- Keep the source's comments. They carry the reasoning, and they are most of
-  why these files are worth copying rather than rewriting.
+**Verify** is the hard one and the one that matters. "Review the code" is not
+verification. "Run a read-only session asked to write a file; assert the file
+does not exist" is.
 
-## Porting to a new platform
+If you cannot write a **Verify**, the rule is probably advice. Advice belongs
+in [`docs/rationale/`](docs/rationale/).
 
-Fill in [`docs/porting/worksheet.md`](docs/porting/worksheet.md), then add a
-column to the primitive table in
-[`docs/porting/platform-mapping.md`](docs/porting/platform-mapping.md). If your
-platform lacks a primitive, add the degradation to
-[`docs/porting/reference-architecture.md`](docs/porting/reference-architecture.md)
-rather than working around it silently — the next person will hit the same gap.
+## Adding a rule
+
+1. Write the field note in `docs/rationale/` first — what broke, and why the
+   obvious fix did not work.
+2. Add the rule to `RULES.md` in the right group, with the next free ID.
+   **IDs are stable and never reused**; they are cited in commits and reviews.
+3. Add its check to the self-assessment in
+   [`docs/architecture/04-conformance.md`](docs/architecture/04-conformance.md).
+4. Update the rationale page's *Rules this justifies* banner.
+5. If it changes a component's contract, update
+   [`docs/architecture/01-components.md`](docs/architecture/01-components.md).
+
+Before adding one, try to fold it into an existing rule. Seventy rules is
+close to the limit of what anyone will read; a new group needs to earn itself.
+
+## Adding a realization
+
+Follow the checklist in
+[`docs/realizations/README.md`](docs/realizations/README.md). In short:
+structure it as **C1–C7**; name the marker primitive first and say whether a
+non-admin can set it from a phone; show the capability translation in both
+postures; say what the automation identity may **not** do; map every
+degradation you relied on; and publish the conformance self-assessment,
+including the failures.
+
+A realization that reports no failures has not been assessed.
+
+## Code in this repository
+
+Only inside `docs/realizations/`, and only when it demonstrates a contract.
+
+- **Copy-pasteable** — no repo-relative references that resolve only here.
+- **Every consumer-edited seam marked `TODO`.**
+- **Syntax-valid**: YAML parses, Python compiles, `bash -n` passes.
+- **Keep the comments.** They carry the reasoning, and they are most of why
+  these files are worth copying rather than rewriting.
+- **Cite the rule** a non-obvious line exists to satisfy.
+
+## Extraction from a source system
+
+Track it in [`EXTRACTION_INVENTORY.md`](EXTRACTION_INVENTORY.md): tier, line
+count, coupling, status.
+
+Extract the **reasoning** before the code, every time. The code without the
+reasoning is a snippet; the reasoning without the code is still an
+architecture.

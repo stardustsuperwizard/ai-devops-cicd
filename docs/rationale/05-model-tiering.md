@@ -1,5 +1,12 @@
 # Model tiering and cost routing
 
+> *Field notes.* This page explains **why** a rule exists — the failure it
+> came from. The rule itself is normative and lives in
+> [`../../RULES.md`](../../RULES.md); the architecture it serves is in
+> [`../architecture/`](../architecture/).
+>
+> **Rules this justifies:** SES-5 … SES-10, DEC-2, HUM-3.
+
 Optimise for cost and quality. Latency is explicitly **not** a goal — every
 stage boundary is a place work waits for a human anyway.
 

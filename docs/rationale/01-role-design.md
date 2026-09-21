@@ -1,5 +1,12 @@
 # Role design: when a role is real
 
+> *Field notes.* This page explains **why** a rule exists — the failure it
+> came from. The rule itself is normative and lives in
+> [`../../RULES.md`](../../RULES.md); the architecture it serves is in
+> [`../architecture/`](../architecture/).
+>
+> **Rules this justifies:** DEC-1, DEC-3, DEC-4, DEC-5.
+
 Most agent rosters are org charts — *writer*, *researcher*, *data engineer*,
 *UI specialist*. This framework decomposes along a different axis, and the
 difference is not cosmetic.

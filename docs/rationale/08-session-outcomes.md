@@ -1,5 +1,12 @@
 # Session outcomes and verdict protocols
 
+> *Field notes.* This page explains **why** a rule exists — the failure it
+> came from. The rule itself is normative and lives in
+> [`../../RULES.md`](../../RULES.md); the architecture it serves is in
+> [`../architecture/`](../architecture/).
+>
+> **Rules this justifies:** OUT-1 … OUT-10.
+
 Two contracts hold the pipeline together once sessions start running: **how a
 session ended** and **what a reviewing session decided**. Both are classified
 by code, never inferred by a human reading a log.

@@ -1,32 +1,19 @@
-# Platform mapping
+# Realization: Jira + Jenkins
 
-The eight primitives from
-[`reference-architecture.md`](reference-architecture.md), mapped onto four
-concrete stacks. Use this to find out what you get for free and what you have
-to build.
+The architecture on a tracker that is not GitHub and a runner that is not
+Actions. Nothing is missing here; Jira + Jenkins is a complete target, and in
+one respect ([workflow validators](#what-jira-gives-you-that-a-thinner-tracker-does-not)) a better one.
 
-## The primitive table
+Component letters (**C1**–**C7**) refer to
+[`../architecture/01-components.md`](../architecture/01-components.md);
+capability letters (**S1**–**S8**) to
+[`../architecture/02-substrate.md`](../architecture/02-substrate.md); rule IDs
+to [`../../RULES.md`](../../RULES.md).
 
-| | GitHub + Actions | **Jira + Jenkins** | GitLab | Azure DevOps |
-| --- | --- | --- | --- | --- |
-| **P1** Work item | Issue | Jira issue | Issue | Work Item |
-| **P2** Hierarchy | Sub-issues | Epic → Story → Sub-task | Epic/child links | Parent/Child link |
-| **P3** Dependency | `blocked-by` | "is blocked by" link | "blocked by" link | Predecessor/Successor |
-| **P4** Marker | Label | **Label field** (see below) | Label | Tag |
-| **P5** Marker event | `issues: [labeled]` | **Webhook `jira:issue_updated`** | Issue webhook | Service hook |
-| **P6** Session runner | Composite action | **Jenkins shared-library step** | CI job template | Pipeline template |
-| **P7** Change proposal | Pull request | **PR/MR in the SCM**, linked by key | Merge request | Pull Request |
-| **P8** Comment | Issue/PR comment | Jira comment | Note | Work Item comment |
+Read [tier 0](../architecture/02-substrate.md#tier-0--the-minimal-realization)
+first if you have not. This page is that script with Jira's nouns.
 
-Nothing in the middle column is missing. Jira + Jenkins is a complete target.
-
----
-
-## Jira + Jenkins in detail
-
-This is the port most likely to be asked for, so it gets the full treatment.
-
-### P4 — which Jira field carries the marker
+## S4 — which Jira field carries the marker
 
 Three candidates. Pick one and never mix them:
 
@@ -36,8 +23,10 @@ Three candidates. Pick one and never mix them:
 | **Status transitions** | Auditable; enforces legal orderings | Workflow scheme edits need admin; exploding state count; one status at a time |
 | **Custom single-select field** | Validated values | Also needs admin; single-valued, so `blocker` + `agent:reviewer:claude` cannot coexist |
 
-Use **labels**, for exactly the reason GitHub labels work: the trigger surface
-has to be reachable from a phone by someone who is not a Jira admin.
+Use **labels**, for the reason **DSP-1** gives: the trigger surface has to be
+reachable from a phone by someone who is not a Jira admin. The multi-valued
+requirement is the other half — `blocked`, a tier and a trigger must coexist
+on one issue, which a status field cannot do.
 
 Keep the same naming scheme — `agent:planner:claude`, `review:pass`,
 `plan`/`planned`, `blocker`, `dashboard:update`. Jira labels **cannot contain
@@ -46,10 +35,10 @@ spaces**, which the scheme already satisfies.
 Create them by filing one scratch issue and applying each label once (Jira
 labels are created on first use, and there is no label-admin API for
 project-scoped labels). That scratch issue is the Jira equivalent of
-`bootstrap-labels.sh` — **and it is just as mandatory.** Without it the
+the bootstrap script **DSP-8** requires — **and it is just as mandatory.** Without it the
 autocomplete is empty and nothing in the control plane fires.
 
-### P5 — the event path
+## S5 / C1 — the event path
 
 Jira webhook → Jenkins. Two wiring options:
 
@@ -91,8 +80,9 @@ triggers { cron('H/10 * * * *') }   // every ~10 minutes
 ```
 
 …then JQL for `labels in (agent:reviewer:copilot, agent:reviewer:claude)` and
-process each hit. Same contract, worse latency. Latency was never a goal — see
-[`../concepts/00-overview.md`](../concepts/00-overview.md).
+process each hit. Same contract, worse latency — which
+the architecture explicitly does not optimise for (**DSP-1** cares that
+dispatch is possible, not that it is fast).
 
 ### Jira's `changelog` is how you detect *which* label was added
 
@@ -119,14 +109,12 @@ def consumeLabel(String key, String label) {
 
 Use the `update` verb, **never** `fields: [labels: [...]]` — the latter
 replaces the whole set and silently drops `blocker`, `review:pass` and
-everything else. This is the P5/C5 asymmetry warned about in the reference
-architecture, and Jira is where it bites hardest.
+everything else. This is rule **DSP-9**, and Jira is where it bites hardest.
 
-### P6 — the session runner as a shared-library step
+## S6 / C3 — the session runner as a shared-library step
 
-C3 becomes `vars/runAgentSession.groovy` in a Jenkins shared library. Same
-contract as the GitHub composite action, same one-file confinement of vendor
-differences:
+C3 becomes `vars/runAgentSession.groovy` in a Jenkins shared library. Same contract as any other
+realization of C3, same one-file confinement of runtime differences (**SES-1**):
 
 ```groovy
 // vars/runAgentSession.groovy
@@ -155,25 +143,25 @@ def call(Map args) {
 Store credentials as Jenkins credentials and bind them per vendor with
 `withCredentials`. The credential a failure message names must match the
 vendor that failed — see
-[`../concepts/08-session-outcomes.md`](../concepts/08-session-outcomes.md).
+[`../rationale/08-session-outcomes.md`](../rationale/08-session-outcomes.md).
 
-### P7 — linking Jira to the change proposal
+## S7 — linking Jira to the change proposal
 
 Jira does not host code. Put the **Jira key in the branch name** (`PROJ-123-…`)
 and in the commit messages, which is what every Jira/SCM integration keys on.
 
-Then, wherever GitHub's model says "the PR closes the issue", Jira's says "the
-PR is linked to the issue and a workflow transition closes it." Keep the link
+So where a tracker that hosts code says "the proposal closes the item", Jira
+says "the proposal is linked to the item and a workflow transition closes it." Keep the link
 explicit: the change proposal's description carries the key, and the publisher
 transitions the issue rather than relying on a smart-commit that may be
 disabled.
 
-### C7 — the control plane on Jira
+## C7 — the control plane on Jira
 
-A Jira dashboard gadget is the board trap all over again — it cannot cause
-work, and it stores a second copy of state.
+A Jira dashboard gadget is the stored-state trap (**OBS-1**): it cannot cause
+work, and it keeps a second copy of facts Jira already holds.
 
-Do the same thing the GitHub side does: a **rendered document**, on demand.
+Do what C7 requires on any substrate: a **rendered document**, on demand.
 Render the derived states into the description of one dedicated Jira issue
 (label it `dashboard`), or into a Confluence page. The derivation is
 unchanged; only the write target differs.
@@ -190,26 +178,26 @@ Ready to merge:     labels = review:pass
 ```
 
 (`issueFunction` needs ScriptRunner. Without it, fetch the dependency links
-per issue and compute the closure in the renderer — which is what the GitHub
-renderer does anyway.)
+per issue and compute the closure in the renderer, which is what C7 does
+anyway.)
 
-### What Jira gives you that GitHub does not
+## What Jira gives you that a thinner tracker does not
 
-- **Real dependency link types**, first-class and queryable, where GitHub's
-  are newer and thinner.
+- **Real dependency link types**, first-class and queryable — S3 natively,
+  where thinner trackers need the body-table degradation.
 - **Custom fields** — the model tier can be a validated single-select rather
   than a label convention.
 - **Workflow validators** — you can genuinely forbid a transition to *In
-  Review* without acceptance criteria, which on GitHub is a check that can be
-  merged past.
+  Review* without acceptance criteria — where a status check can be merged
+  past.
 
-Use the third one. A Jira workflow validator that refuses to let a task reach
-dispatchable state without non-empty acceptance criteria enforces the
-cold-start test from
-[`../concepts/03-handoff-contract.md`](../concepts/03-handoff-contract.md)
-structurally, which is strictly better than validating it in the planner.
+Use the third one. A validator that refuses to let a task reach dispatchable
+state without non-empty acceptance criteria enforces **HND-3**, the cold-start
+test, *structurally* — strictly better than validating it inside the planner,
+because it cannot be argued with. Where a substrate can make a rule impossible
+to break, prefer that over checking it.
 
-### What Jenkins gives you that Actions does not
+## What Jenkins gives you
 
 - **A real credential store** with per-job scoping.
 - **Agents/nodes you control** — a session runner that needs a GPU, a licence
@@ -217,62 +205,37 @@ structurally, which is strictly better than validating it in the planner.
 - **`stash`/`unstash` and durable workspaces**, so a merge-base checkout for
   the red gate is cheap.
 
-### What you lose, and must rebuild
+## What you must rebuild
 
-| Lost | Rebuild as |
+| Absent | Rebuild as |
 | --- | --- |
-| Fork-safe read-only tokens | Explicit least-privilege Jenkins credentials per job |
-| `GITHUB_TOKEN` "setup: none" | A service account, with its own Jira permission scheme |
-| Draft proposal state | A `wip` label on the issue, or the SCM's own draft flag |
+| Fork-safe read-only tokens (**GAT-7**) | Explicit least-privilege Jenkins credentials per job |
+| A zero-setup automation identity | A service account, with its own Jira permission scheme |
+| Draft proposal state (**GAT-10**) | A `wip` label on the issue, or the SCM's own draft flag |
 | Checks UI on the diff | Post gate reports as SCM comments; keep the run summary as the record |
-| Sub-issue auto-linking | Explicit parent link written by the publisher |
+| Sub-item auto-linking | Explicit parent link written by C5 |
 
 ---
 
-## GitLab notes
+## Conformance notes for this realization
 
-Nearly one-to-one with GitHub. Three differences worth planning for:
+Run the self-assessment in
+[`../architecture/04-conformance.md`](../architecture/04-conformance.md).
+Three checks deserve extra care on this substrate:
 
-- **CI is `.gitlab-ci.yml` with `include:` templates.** C3 becomes a job
-  template with `extends:`, which is closer to a reusable workflow than to a
-  composite action — variables, not inputs.
-- **Label events** are available via webhooks and, in newer versions, as
-  pipeline triggers; check your version rather than assuming.
-- **Merge request approval rules** are stronger than GitHub's, so gate 6
-  (human-decision boundaries) can be enforced by an approval rule instead of a
-  convention.
+- **DSP-9 (marker writes add, not replace).** Jira's `fields:` form replaces
+  the whole label set. Use the `update:` verb, every time. This is the single
+  most likely silent data loss here.
+- **DSP-1 (dispatch from any client).** Verify on the Jira mobile app, as a
+  user without project-admin rights. If your marker primitive turned out to be
+  a status transition or a custom field, this is where you find out.
+- **SES-1 (runtime differences in one place).** The shared library is that
+  place. A `if (vendor == …)` in a Jenkinsfile means the seam has leaked.
 
-## Azure DevOps notes
+## Where this came from
 
-- Work Item **tags** are the marker primitive; service hooks are the event.
-- Pipeline **templates** with `parameters:` map cleanly onto C3's inputs —
-  arguably more cleanly than composite actions, since parameters are typed.
-- The work-item **Rules** engine can enforce the acceptance-criteria
-  precondition the same way a Jira validator can.
-
-## Porting checklist
-
-Work in this order; each step is verifiable before the next.
-
-1. [ ] Map all eight primitives. Name the degradation for any you lack.
-2. [ ] Create the marker vocabulary, and prove a human can set one from a
-       phone in two taps.
-3. [ ] Wire **one** marker to **one** job that does nothing but echo the item
-       key. Do not proceed until a label add reliably produces a run.
-4. [ ] Build C3, the session runner, with **one** vendor. Prove the capability
-       knob works in both postures by asserting a read-only session cannot
-       write a file.
-5. [ ] Add the second vendor. Nothing above C3 may change. If something did,
-       the abstraction is wrong.
-6. [ ] Build the **reviewer** role end to end — it is read-only, so it cannot
-       damage anything, and it exercises C2 through C5 completely.
-7. [ ] Add the implementer. This is where write capability, branches and
-       proposals arrive.
-8. [ ] Add the planner, with **structural validation of its output** before
-       any item is created.
-9. [ ] Add the fixer and the escalation cap.
-10. [ ] Add quality gates.
-11. [ ] Add the control-plane renderer last — it derives from everything above.
-
-Step 6 before step 7 is deliberate: build the role that cannot break anything
-first.
+Nothing on this page is theoretical wiring — but it has not been run end to
+end as a whole. The component contracts and rules it realizes are from a
+production system; the Jira and Jenkins specifics are the translation. Treat
+the code fragments as shape, and verify against your own versions, which
+differ more than the vendors' docs admit.

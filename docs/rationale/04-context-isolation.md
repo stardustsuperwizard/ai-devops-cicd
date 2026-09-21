@@ -1,5 +1,12 @@
 # Context isolation
 
+> *Field notes.* This page explains **why** a rule exists — the failure it
+> came from. The rule itself is normative and lives in
+> [`../../RULES.md`](../../RULES.md); the architecture it serves is in
+> [`../architecture/`](../architecture/).
+>
+> **Rules this justifies:** CTX-1 … CTX-5.
+
 What a role must **not** see is part of its definition, and it has to be
 enforced by what the prompt assembler does not fetch.
 
