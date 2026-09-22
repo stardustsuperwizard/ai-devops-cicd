@@ -1,12 +1,15 @@
-# Build guide
+# Procedure
 
-A phase-by-phase plan for building this architecture on whatever substrate you
-have. Each phase is small enough for one working session, ends in a durable
+**Step 2 of the [adaptation method](README.md).** A phase-by-phase build plan.
+Each phase is small enough for one working session, ends in a durable
 artifact, and has a done-test you can run — which is, not coincidentally, the
 property the architecture itself is built on.
 
-It is written to be executed by a person or by an agent session, one phase at
-a time.
+| | |
+| --- | --- |
+| **Prompts** to hand your agent companion, per phase | [`04-agent-playbook.md`](04-agent-playbook.md) |
+| **Tests** that prove each phase landed | [`05-equivalence-tests.md`](05-equivalence-tests.md) |
+| **What you did differently** | [`06-deviation-log.md`](06-deviation-log.md) |
 
 **Before starting, read:**
 [`../architecture/00-the-model.md`](../architecture/00-the-model.md) for the
@@ -17,10 +20,16 @@ component contracts, and
 rationale, make it
 [`../rationale/02-capability-removal.md`](../rationale/02-capability-removal.md).
 
-**Fill in [`01-survey.md`](01-survey.md) first.** Every phase refers to
-answers in it. A build that starts coding before the worksheet is filled in
-reaches phase 4 and discovers its marker primitive cannot be set without admin
-rights.
+**Fill in [`01-survey.md`](01-survey.md) and work
+[`02-seam-catalogue.md`](02-seam-catalogue.md) first.** Every phase refers to
+both. A build that starts coding before the survey is filled in reaches phase
+4 and discovers its marker primitive cannot be set without admin rights.
+
+**Build the merge gate before any agent runs.** It is
+[level 0](../architecture/04-conformance.md#level-0--safe-to-run-at-all), and
+it is not in the phase list below because it precedes it: a pipeline without
+it is an unreviewed-code-merging machine with an agent attached, and every
+phase after this point makes it faster.
 
 **Build [tier 0](../architecture/02-substrate.md#tier-0--the-minimal-realization)
 first if you are unsure of anything.** It is the whole control plane in forty

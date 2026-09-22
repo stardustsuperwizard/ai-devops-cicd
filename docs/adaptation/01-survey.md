@@ -1,11 +1,20 @@
-# Substrate worksheet
+# Survey
 
-Copy this file into your project and fill it in **before writing any code**.
-Phase 0 of [`03-procedure.md`](03-procedure.md) is complete when every row has an
-answer and every gap has a named degradation from
+**Step 0 of the [adaptation method](README.md).** Copy this into your project
+and fill it in **before writing any code**. Every later step refers to it.
+
+Complete when every row has an answer and every gap has a named degradation
+from
 [`../architecture/02-substrate.md`](../architecture/02-substrate.md#degradations).
 
-An unanswered row is a decision you will make by accident later.
+An unanswered row is a decision you will make by accident later — usually at
+[`02-seam-catalogue.md`](02-seam-catalogue.md), and usually the wrong way.
+
+Fill it in **with your agent companion interviewing you**, one section at a
+time — the prompt is phase 0 of
+[`04-agent-playbook.md`](04-agent-playbook.md). An agent handed a blank form
+fills it with plausible defaults; an agent asking one question at a time
+records decisions.
 
 ---
 
@@ -149,11 +158,15 @@ re-run the job", confirm the failure message says so.)
 
 > Answer:
 
-## Toolchain adapter
+## Toolchain adapters
 
-The language- and tool-specific commands. Every component above calls these,
-never the tool. Drawing this boundary on day one is what makes the rest of the
-pipeline portable; retrofitting it is a rewrite.
+The language- and tool-specific commands — the **only** place your language
+appears. Every component calls these, never your tools. Drawing this boundary
+on day one is what makes the rest portable; retrofitting it is a rewrite.
+
+These four map onto the adapter files in the reference
+([`02-seam-catalogue.md` group H](02-seam-catalogue.md#h--the-toolchain)):
+`project-validate.sh`, `setup-toolchain`, `format-code`, `suite-log.sh`.
 
 | Operation | Command | Notes |
 | --- | --- | --- |
@@ -190,3 +203,12 @@ Then run the full self-assessment in
 Any box unchecked, name it and say why it was traded:
 
 > Answer:
+
+---
+
+## Next
+
+1. Build [tier 0](../architecture/02-substrate.md#tier-0--the-minimal-realization)
+   — playbook phase 1.
+2. Work [`02-seam-catalogue.md`](02-seam-catalogue.md) — playbook phase 2.
+3. Then [`03-procedure.md`](03-procedure.md), phase by phase.

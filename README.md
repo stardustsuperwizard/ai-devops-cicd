@@ -70,7 +70,7 @@ by the platform rather than by a document asking people to be careful.
 | **The whole pipeline, intake to merge** | [`docs/PIPELINE.md`](docs/PIPELINE.md) |
 | **The rules** | [`RULES.md`](RULES.md) |
 | **Working files to copy** | [`templates/github-actions/`](templates/github-actions/) |
-| **To adapt it to different tools** | [`docs/adaptation/`](docs/adaptation/) |
+| **To adapt it to different tools** | [`docs/adaptation/`](docs/adaptation/) — survey, seam catalogue, agent playbook, equivalence tests |
 | To know whether what you built conforms | [`docs/architecture/04-conformance.md`](docs/architecture/04-conformance.md) |
 | The abstract model beneath it | [`docs/architecture/00-the-model.md`](docs/architecture/00-the-model.md) |
 | The smallest thing that is still this architecture | [tier 0](docs/architecture/02-substrate.md#tier-0--the-minimal-realization) — 40 lines of shell |
@@ -84,7 +84,9 @@ RULES.md               98 normative rules. Numbered, checkable, cited by ID.
 templates/             Working files. GitHub Actions, ~22k lines.
 docs/architecture/     The abstract model: entities, components, substrate,
                        interfaces, conformance. No products named.
-docs/adaptation/       Methodology for moving it to different tools.
+docs/adaptation/       Methodology for moving it to different tools: the
+                       seams, the procedure, prompts for an agent companion,
+                       and the tests that prove a port is right.
 docs/rationale/        Field notes — why each rule exists, and what broke first.
 examples/              The production system it was distilled from.
 ```
@@ -160,7 +162,7 @@ triggered yet" for as long as it takes someone to guess.
 | ✅ | The architecture: model, components, substrate, interfaces, conformance with 5 levels and a self-assessment |
 | ✅ | GitHub Actions implementation — the full agent control plane, CI, gates, issue and PR templates, and four toolchain adapters |
 | ✅ | Field notes behind every rule group |
-| 🚧 | Adaptation methodology — survey and procedure written; seam catalogue, agent playbook and equivalence tests still to come |
+| ✅ | Adaptation methodology — survey, 40-seam catalogue, build procedure, agent-companion playbook, 60 equivalence tests, deviation log |
 | ⬜ | Further extraction from the source system — see [`EXTRACTION_INVENTORY.md`](EXTRACTION_INVENTORY.md) |
 
 ## Licence

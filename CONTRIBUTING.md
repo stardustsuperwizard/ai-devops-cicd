@@ -57,24 +57,45 @@ in [`docs/rationale/`](docs/rationale/).
 5. If it changes a component's contract, update
    [`docs/architecture/01-components.md`](docs/architecture/01-components.md).
 
-Before adding one, try to fold it into an existing rule. Seventy-six rules is
-close to the limit of what anyone will read; a new group needs to earn itself.
+Before adding one, try to fold it into an existing rule. Ninety-eight rules is
+past the limit of what anyone reads in one sitting; a new group needs to earn
+itself, and a new rule needs to be one an existing rule does not already
+cover.
 
-## Adding a realization
+## Adding a seam to the catalogue
 
-Follow the checklist in
-[`templates/github-actions/README.md`](templates/github-actions/README.md). In short:
-structure it as **C1–C7**; name the marker primitive first and say whether a
-non-admin can set it from a phone; show the capability translation in both
-postures; say what the automation identity may **not** do; map every
-degradation you relied on; and publish the conformance self-assessment,
-including the failures.
+[`docs/adaptation/02-seam-catalogue.md`](docs/adaptation/02-seam-catalogue.md)
+is the translation aid, and it only works if every entry has all four parts:
 
-A realization that reports no failures has not been assessed.
+| | |
+| --- | --- |
+| **Does** | A line in the reference someone can open |
+| **Means** | The intent. This is what gets translated — never the syntax |
+| **Ask** | The question to put to another platform |
+| **The tell** | What you observe when a substitute is wrong |
+
+**The tell is the part that earns the entry.** Anyone can list what a line
+does; the value is knowing that getting it wrong produces no error, and what
+you see instead. If you cannot write a tell, the seam is probably not a seam —
+it is a line of code.
+
+Add an equivalence test in
+[`05-equivalence-tests.md`](docs/adaptation/05-equivalence-tests.md) for any
+seam whose failure is silent, and mark it 🔴.
+
+## Reporting a port
+
+Publish the conformance self-assessment from
+[`docs/architecture/04-conformance.md`](docs/architecture/04-conformance.md),
+including the failures, and the deviation log.
+
+**A port that reports no findings has not been assessed.**
 
 ## Code in this repository
 
-Only inside `templates/github-actions/`, and only when it demonstrates a contract.
+Only inside `templates/github-actions/`, and only when it demonstrates a
+contract. It is the reference the whole adaptation method reads, so its
+comments are load-bearing documentation rather than commentary.
 
 - **Copy-pasteable** — no repo-relative references that resolve only here.
 - **Every consumer-edited seam marked `TODO`.**
