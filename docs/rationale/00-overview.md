@@ -79,7 +79,7 @@ you something false.
 | [`09-quality-gates.md`](09-quality-gates.md) | How do you stop an agent from deleting the failing test? |
 | [`../architecture/01-components.md`](../architecture/01-components.md) | What are the components, and what may each one know? |
 | [`../architecture/02-substrate.md`](../architecture/02-substrate.md) | What does this need from my stack — and what if I have none of it? |
-| [`../realizations/jira-jenkins.md`](../realizations/jira-jenkins.md) | What does this look like on Jira + Jenkins? |
+| [`../../templates/github-actions/`](../../templates/github-actions/) | What does this look like on Jira + Jenkins? |
 
 ## What this is *not*
 

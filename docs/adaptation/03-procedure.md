@@ -17,7 +17,7 @@ component contracts, and
 rationale, make it
 [`../rationale/02-capability-removal.md`](../rationale/02-capability-removal.md).
 
-**Fill in [`worksheet.md`](worksheet.md) first.** Every phase refers to
+**Fill in [`01-survey.md`](01-survey.md) first.** Every phase refers to
 answers in it. A build that starts coding before the worksheet is filled in
 reaches phase 4 and discovers its marker primitive cannot be set without admin
 rights.
@@ -31,7 +31,7 @@ rather than a sprint.
 
 ## Phase 0 — Decide, and write it down
 
-**Output:** a completed [`worksheet.md`](worksheet.md) committed to the repo.
+**Output:** a completed [`01-survey.md`](01-survey.md) committed to the repo.
 
 Do not skip this because the answers seem obvious. The two that are never
 obvious:

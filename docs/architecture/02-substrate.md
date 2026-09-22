@@ -51,7 +51,7 @@ preserves conformance.
 
 | Missing | Symptom | Substitute |
 | --- | --- | --- |
-| **S5** notification | Nothing dispatches by itself | **Poll.** Scan on an interval for items carrying a trigger. Identical contract; only latency changes — and latency was never a goal. |
+| **S5** notification | Nothing dispatches by itself | **Poll.** Scan on an interval for items carrying a trigger. Identical contract; only latency changes — which this architecture does not optimise for. |
 | **S4** markers | No trigger surface | A status field with a dedicated "requested" value; a tag; a naming convention on a branch. Anything a person can set in two taps without admin rights. |
 | **S3** dependencies | Cannot order dispatch | A dependency table **in the item body**, parsed at render time. Worth doing anyway: the body is human-readable and reviewable, where native links are neither. |
 | **S2** hierarchy | No parent ↔ child | A parent field plus a line in the body. Derive the tree when rendering. |
@@ -188,7 +188,7 @@ can read the whole control plane in one sitting.
 
 **This is the fallback whenever a substrate question stalls.** Build tier 0,
 confirm the shape is right, then lift it onto whatever you have. Every
-realization in [`../realizations/`](../realizations/) is this script with
+realization in [`../../templates/github-actions/`](../../templates/github-actions/) is this script with
 someone else's nouns.
 
 ## Surveying a substrate you did not choose
@@ -208,5 +208,5 @@ Working in an organisation with a mandated stack, in order:
    or never. Every stage is idempotent and re-runnable; the render is derived
    so a missed event only makes it stale.
 
-Record the answers in [`../building/worksheet.md`](../building/worksheet.md)
+Record the answers in [`../adaptation/01-survey.md`](../adaptation/01-survey.md)
 before writing anything.

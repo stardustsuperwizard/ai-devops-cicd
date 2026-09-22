@@ -1,0 +1,884 @@
+name: CI
+
+# The one pull-request-triggered workflow, and the CI half of an agentic
+# pipeline. It always reports a single aggregate status check, `ci`, whatever
+# a pull request touched -- so branch protection has exactly one required
+# check to name, ever, rather than one per verification job that has to be
+# kept in sync by hand.
+#
+# That single check is not a convenience. It is what makes MRG-1 (a human
+# approval and a green required check before merge) enforceable: a required
+# check list that drifts out of sync with the jobs is a merge gate with holes
+# in it, and nobody notices until something red merges.
+#
+# ---- Triggers are deliberately unfiltered ------------------------------
+#
+# BEWARE if a workflow ever becomes a required status check: a workflow
+# skipped by a path filter reports NO STATUS AT ALL, so pull requests hang
+# forever on "Expected -- Waiting for status to be reported". Unlike a job
+# skipped by `if:`, which reports success.
+#
+# That is exactly the situation `ci` is built for: a required status check
+# needs a report on every pull request, always. So filtering moves from the
+# trigger into each job's own `if:`, decided once by the `changes` job below,
+# and the `ci` job -- gated only on `always()` -- is what actually reports. A
+# job skipped by `if:` still counts as reported ("skipped"), which is what
+# keeps a docs-only pull request from hanging.
+#
+# ---- What is in here, and what is not ---------------------------------
+#
+#   changes       decide which expensive gates need to run at all
+#   validate      the toolchain adapter, via project-validation.yml
+#   actionlint    lint the control plane itself, pinned by checksum
+#   test-ratchet  GAT-2: test and assertion counts may not fall
+#   red-gate      GAT-1: a new test must have failed before the change
+#   ci            the aggregate. THIS is the required check.
+#
+# The two gates are the agent-specific ones. A human who deletes a failing
+# test knows they did it; an agent optimising for a green check does it as
+# the cheapest available move, in a diff too large for anyone to notice.
+#
+# TODO: add your own jobs -- packaging, integration tests, static analysis,
+# dependency scanning. Add each to `ci`'s `needs:` list and nowhere else.
+on:
+  pull_request:
+  # Deliberately also on push to the default branch: a `pull_request`-only
+  # trigger means a merge queue or a direct push could land a change that no
+  # pull request check ever saw. Unfiltered for the same reason above --
+  # gating happens in `changes` and each job's `if:`.
+  push:
+    branches:
+      - main
+  # The escape hatch: run every job by hand against any branch, whatever the
+  # `changes` job would otherwise decide.
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+
+  # Decides which of the two expensive gates below actually need to run,
+  # so verification stays fanned out in parallel behind `if:` guards instead
+  # of behind separate trigger path filters. On `push` and `workflow_dispatch`
+  # there is no pull request diff to read, so both gates open unconditionally
+  # -- a direct push to main or a manual run is exactly the case the old
+  # push-trigger coverage existed to catch, and it must not be skippable by a
+  # missing diff.
+  changes:
+    name: Changed File Gates
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      source: ${{ steps.gate.outputs.source }}
+      control_plane: ${{ steps.gate.outputs.control_plane }}
+      # Whether the pull request touches a test path at all, read by the
+      # `red-gate` job below. Narrower than the two gates above and computed
+      # separately: this one is not "might the build break", it is "is there a
+      # test change to prove red against the merge base".
+      tests: ${{ steps.gate.outputs.tests }}
+    steps:
+      # Only needed on `push`: the `git diff-tree` read below needs a working
+      # tree with enough history to contain `github.event.before`, which a
+      # `pull_request` run gets from `gh api` instead and a
+      # `workflow_dispatch` run never reads at all. `fetch-depth: 0` rather
+      # than the default shallow fetch -- `before` is the commit prior to
+      # this push, which a depth-1 clone would not contain.
+      - name: Checkout Repository
+        if: ${{ github.event_name == 'push' }}
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Determine Gates
+        id: gate
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT_NAME: ${{ github.event_name }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPOSITORY: ${{ github.repository }}
+          EVENT_BEFORE: ${{ github.event.before }}
+          EVENT_AFTER: ${{ github.event.after }}
+        run: |
+          set -euo pipefail
+
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            echo "source=true" >> "$GITHUB_OUTPUT"
+            echo "control_plane=true" >> "$GITHUB_OUTPUT"
+            # The `red-gate` job is pull-request-only and skips this event
+            # whatever this says, but every code path here has to emit every
+            # output: a job reading an output that one branch never wrote gets
+            # the empty string, which is neither `true` nor an error.
+            echo "tests=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if [ "$EVENT_NAME" = "push" ]; then
+            # For push events, attempt to read changed files from git. If the
+            # read fails, or succeeds but reports no changed files at all,
+            # fail safe by opening both gates -- an empty read is closer to
+            # "unreadable" than to "nothing changed". If every changed file
+            # is under .metrics/, close both gates; otherwise open both.
+            if git diff-tree --no-commit-id --name-only -r "$EVENT_BEFORE" "$EVENT_AFTER" \
+                 > "$RUNNER_TEMP/pr-files.txt" 2>/dev/null \
+               && [ -s "$RUNNER_TEMP/pr-files.txt" ]; then
+              # Successfully read a non-empty changed-file list; check if all
+              # are under .metrics/
+              if grep -v "^\.metrics/" "$RUNNER_TEMP/pr-files.txt" | grep -q . 2>/dev/null; then
+                # At least one file is not under .metrics/, so open both gates
+                echo "source=true" >> "$GITHUB_OUTPUT"
+                echo "control_plane=true" >> "$GITHUB_OUTPUT"
+              else
+                # All changed files are under .metrics/, close both gates
+                echo "source=false" >> "$GITHUB_OUTPUT"
+                echo "control_plane=false" >> "$GITHUB_OUTPUT"
+              fi
+              # Reported honestly from the same list even though `red-gate` is
+              # pull-request-only and skips this event: an output that is
+              # sometimes a lie is worse than one that is never read. The two
+              # directories are `count-tests.py`'s SCANNED_DIRS, which is what
+              # makes a path a test path everywhere in this gate.
+              if grep -qE "^(tests|rules/tests)/" "$RUNNER_TEMP/pr-files.txt"; then
+                echo "tests=true" >> "$GITHUB_OUTPUT"
+              else
+                echo "tests=false" >> "$GITHUB_OUTPUT"
+              fi
+            else
+              # Could not read changed files, or the read was empty; fail
+              # safe by opening both gates.
+              echo "source=true" >> "$GITHUB_OUTPUT"
+              echo "control_plane=true" >> "$GITHUB_OUTPUT"
+              echo "tests=true" >> "$GITHUB_OUTPUT"
+            fi
+            exit 0
+          fi
+
+          # For pull_request events, read from the pull request's paginated
+          # changed-file list, not `gh pr view --json files` -- that one is
+          # GraphQL and stops at the first 100 files, so a large pull request
+          # touching a restricted path past that boundary would read as clean.
+          # `--paginate` has no such ceiling. Same reasoning as agent-05-fix.yml's
+          # identical read.
+          gh api --paginate \
+            "repos/$REPOSITORY/pulls/$PR_NUMBER/files" \
+            --jq '.[].filename' > "$RUNNER_TEMP/pr-files.txt"
+
+          python3 - "$RUNNER_TEMP/pr-files.txt" <<'PY' >> "$GITHUB_OUTPUT"
+          import re
+          import sys
+
+          paths = [line.strip() for line in open(sys.argv[1]) if line.strip()]
+
+          def glob_to_regex(pattern):
+              # GitHub's own path-filter semantics: an unescaped "**" spans
+              # directory separators (and, with nothing before it but the
+              # start of the pattern or a "/", may match zero directories --
+              # which is what lets "**.md" match a root-level file like
+              # AGENTS.md, not only a nested one). A lone "*" matches within
+              # one path segment only.
+              out = []
+              i = 0
+              while i < len(pattern):
+                  if pattern[i:i + 2] == "**":
+                      out.append(".*")
+                      i += 2
+                  elif pattern[i] == "*":
+                      out.append("[^/]*")
+                      i += 1
+                  elif pattern[i] == "?":
+                      out.append("[^/]")
+                      i += 1
+                  else:
+                      out.append(re.escape(pattern[i]))
+                      i += 1
+              return "^" + "".join(out) + "$"
+
+          def matches_any(patterns, path):
+              return any(re.match(glob_to_regex(p), path) for p in patterns)
+
+          # TODO: configure both lists for your project.
+          #
+          # SOURCE_DENY is a DENY-list on purpose, and this is the whole
+          # design decision worth copying. An allow-list
+          # (`paths: ['**.py', ...]`) FAILS UNSAFE: the day someone adds a
+          # new source directory, validation silently stops covering it and
+          # nothing reports that it has. A deny-list FAILS SAFE -- an
+          # unrecognized new path runs the check, and a false positive costs
+          # two minutes of a runner.
+          #
+          # So list here only what provably CANNOT break a build: prose,
+          # issue templates, agent prompts, images. When in doubt, leave it
+          # out and let the check run.
+          #
+          # The list deliberately stops short of the validation harness
+          # itself -- a change to `project-validate.sh` or the
+          # `setup-toolchain` adapter must run the check it defines.
+          SOURCE_DENY = [
+              "**.md",
+              "docs/**",
+              ".github/ISSUE_TEMPLATE/**",
+              ".github/pull_request_template.md",
+              "LICENSE",
+              ".gitignore",
+              # TODO: add your own provably-inert paths.
+          ]
+
+          # CONTROL_PLANE_ALLOW is an ALLOW-list, and the asymmetry is
+          # deliberate: "did this change the pipeline itself?" has a small,
+          # enumerable answer, where "could this break the build?" does not.
+          #
+          # One list drives every control-plane job rather than a narrower
+          # filter per job -- a change under any of these paths can affect
+          # any of the harnesses.
+          CONTROL_PLANE_ALLOW = [
+              ".github/workflows/**",
+              ".github/actions/**",
+              ".github/scripts/**",
+              ".github/agents/**",
+              ".github/tests/**",
+              # TODO: your local agent role definitions, if you have them,
+              # e.g. ".claude/agents/**", ".claude/commands/**".
+          ]
+
+          # A pull request runs validation if *any* changed file falls
+          # outside the deny-list, so a branch touching both a doc and a
+          # source file is validated. Only pure-prose pull requests skip.
+          source_changed = any(not matches_any(SOURCE_DENY, p) for p in paths)
+
+          # The control-plane check runs if *any* changed file falls inside
+          # the allow-list.
+          control_plane = any(matches_any(CONTROL_PLANE_ALLOW, p) for p in paths)
+
+          # The red gate's own, much narrower question: did this pull request
+          # touch a test at all? Neither list above answers it -- `tests/` is
+          # absent from SOURCE_DENY because a test change can break the build,
+          # and absent from CONTROL_PLANE_ALLOW because it is not control
+          # plane. These two directories are `count-tests.py`'s SCANNED_DIRS,
+          # which is what makes a path a test path everywhere in this gate;
+          # `rules/tests/` is listed separately because it does not start with
+          # `tests/`. A literal prefix test, not a glob: the answer must agree
+          # with `red-gate.py`'s `is_test_path()`, and the glob machinery above
+          # is a different rule for a different question.
+          tests = any(
+              p == d or p.startswith(d + "/")
+              for p in paths
+              for d in ("tests", "rules/tests")
+          )
+
+          print(f"source={'true' if source_changed else 'false'}")
+          print(f"control_plane={'true' if control_plane else 'false'}")
+          print(f"tests={'true' if tests else 'false'}")
+          PY
+
+  # The job body lives in `project-validation.yml`, called rather than
+  # inlined, so the agent workflows can run the identical job against the
+  # commits they push instead of depending on this workflow's `pull_request`
+  # trigger firing for them -- which in the source system repeatedly failed
+  # to do, landing in `action_required` and never executing.
+  #
+  # One definition, three callers. GAT-8 in practice: the same
+  # `project-validate.sh` a contributor runs locally is the same one CI runs
+  # and the same one the implementer runs before marking a pull request
+  # ready. Three copies of "is it green?" would drift, and the one that
+  # drifts is always the one the agent trusts.
+  #
+  # No `head-sha` is passed. A `pull_request` run already attaches its status
+  # to the right commit, so an explicit check run here would only duplicate
+  # what GitHub reports for free -- and `checks: write` stays unneeded.
+  validate:
+    name: Project Validation
+    needs: changes
+    if: ${{ !cancelled() && !failure() && needs.changes.outputs.source == 'true' }}
+    uses: ./.github/workflows/project-validation.yml
+    permissions:
+      contents: read
+
+
+  # Workflow schema, expression syntax, and action-reference checking.
+  actionlint:
+    name: Actionlint
+    needs: changes
+    if: ${{ !cancelled() && !failure() && needs.changes.outputs.control_plane == 'true' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      # Pinned by version AND checksum. This is the one thing in the job that
+      # comes from off the runner, and an unpinned linter is a supply-chain
+      # hole that runs on every control-plane change.
+      - name: Install actionlint
+        shell: bash
+        env:
+          ACTIONLINT_VERSION: "1.7.7"
+          ACTIONLINT_SHA256: >-
+            023070a287cd8cccd71515fedc843f1985bf96c436b7effaecce67290e7e0757
+        run: |
+          set -euo pipefail
+
+          TARBALL="actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz"
+
+          curl -sSLf \
+            -o "$RUNNER_TEMP/$TARBALL" \
+            "https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/${TARBALL}"
+
+          echo "$ACTIONLINT_SHA256  $RUNNER_TEMP/$TARBALL" | sha256sum -c -
+
+          tar -xzf "$RUNNER_TEMP/$TARBALL" -C "$RUNNER_TEMP" actionlint
+
+      - name: Actionlint
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # shellcheck and pyflakes integration are OFF, deliberately.
+          #
+          # actionlint shells out to both when they are on PATH, and they are
+          # on ubuntu-latest. Pointed at this repository that means linting
+          # every embedded bash and python block as though it were a
+          # standalone program -- thousands of lines of it, most of the
+          # findings style rather than defects, and none of it what a control-plane hardening task asked
+          # for. The embedded programs have their own check:
+          # the control-plane test suite compiles every python step and
+          # parses every jq program. This step checks the workflow schema.
+          #
+          # The ignore is a false positive, not a silenced defect.
+          # `copilot-requests` is a real permission scope -- five agent
+          # workflows need it to open a Copilot session -- and actionlint
+          # 1.7.7 simply predates it. Drop this when a release knows the
+          # scope; leaving it in only re-hides a genuinely unknown scope.
+          "$RUNNER_TEMP/actionlint" \
+            -no-color \
+            -oneline \
+            -shellcheck= \
+            -pyflakes= \
+            -ignore 'unknown permission scope "copilot-requests"'
+
+
+  # The test ratchet (the test ratchet): neither the number of suites that actually run
+  # nor the number of `_expect(` assertions may fall on a pull request without
+  # a human saying so on the pull request itself.
+  #
+  # Pull-request-only, and gated by `github.event_name` rather than by a
+  # trigger filter, for the reason the file header gives: a `push` to main and
+  # a `workflow_dispatch` run have no merge base to ratchet against, so there
+  # is nothing to compare and the job reports `skipped` -- which `ci` already
+  # counts as passing.
+  #
+  # Deliberately NOT behind the `changes` gate, unlike `validate` and the
+  # control-plane jobs. This job is python-only and costs seconds, so a
+  # deny-list or allow-list here would buy nothing and add one more list to
+  # keep in sync -- and the failure mode of getting that list wrong is a
+  # ratchet that silently stops running, which is the one failure mode this
+  # whole gate exists to prevent.
+  #
+  # `contents: read` to see both sides of the merge, `pull-requests: read` to
+  # read the override label. Nothing is written back to GitHub: the report
+  # goes to `$GITHUB_STEP_SUMMARY` and the annotation stream, so a fork pull
+  # request's read-only token is all this ever needs.
+  test-ratchet:
+    name: Test Ratchet
+    if: ${{ !cancelled() && !failure() && github.event_name == 'pull_request' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      # `fetch-depth: 0` because both sides of the merge are needed: the
+      # default shallow fetch has no merge base to find.
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve Merge Base
+        id: merge-base
+        shell: bash
+        env:
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+
+          # The pull request's own two endpoints, not `github.sha` -- on a
+          # `pull_request` run that is the ephemeral merge commit.
+          status=0
+          merge_base="$(git merge-base "$HEAD_SHA" "$BASE_SHA")" || status=$?
+
+          if [ "$status" -ne 0 ] || [ -z "$merge_base" ]; then
+            echo "::error::no merge base between head $HEAD_SHA and base" \
+              "$BASE_SHA -- the ratchet has nothing to compare against"
+            exit 1
+          fi
+
+          echo "Merge base: $merge_base"
+          echo "merge_base=$merge_base" >> "$GITHUB_OUTPUT"
+
+      - name: Count Merge Base And Head
+        shell: bash
+        env:
+          MERGE_BASE: ${{ steps.merge-base.outputs.merge_base }}
+        run: |
+          set -euo pipefail
+
+          # A detached worktree under $RUNNER_TEMP, never a second checkout
+          # inside the tree: Part 5 of the control-plane test suite is an absolute
+          # check with an empty allow-list, and an earlier incident is what it remembers.
+          git worktree add --detach "$RUNNER_TEMP/base" "$MERGE_BASE"
+
+          # The HEAD checkout's copy of the counter against BOTH trees, on
+          # purpose. Running each side's own counter would let a pull request
+          # that weakens the counting rules shed suites for free; with one
+          # counter on both sides a rule change moves both numbers and the
+          # delta stays honest. `--root` is the counter's only root, so
+          # pointing it at a worktree it is not sitting in is supported.
+          python3 .github/scripts/count-tests.py count --root "$RUNNER_TEMP/base" \
+            > "$RUNNER_TEMP/base-counts.json"
+          python3 .github/scripts/count-tests.py count --root . \
+            > "$RUNNER_TEMP/head-counts.json"
+
+      - name: Compare Counts
+        id: compare
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # `status=0; cmd || status=$?`, never `if ! cmd` and never
+          # `cmd | tee`. project-validate.sh:43-48 documents why in this
+          # repository's own words: after a negated command $? is the status
+          # of the negation, and in a pipeline it is the last command's --
+          # either way the fall gets reported and the step still exits 0. A
+          # ratchet that reports a fall and exits 0 is worse than no ratchet.
+          status=0
+          python3 .github/scripts/count-tests.py compare \
+            --base "$RUNNER_TEMP/base-counts.json" \
+            --head "$RUNNER_TEMP/head-counts.json" \
+            > "$RUNNER_TEMP/ratchet.md" || status=$?
+
+          # Unconditionally -- pass, fall, or downgrade. Both counts and their
+          # signed deltas belong in the summary of every run, so the trend is
+          # readable without digging through logs.
+          cat "$RUNNER_TEMP/ratchet.md" >> "$GITHUB_STEP_SUMMARY"
+
+          # 1 is "a count fell", which the label below may downgrade. Anything
+          # else is the counter itself failing (2 is a missing or malformed
+          # report), and that is not a test-removal decision, so no label
+          # downgrades it -- fail here, before the branch can reach it.
+          if [ "$status" -ne 0 ] && [ "$status" -ne 1 ]; then
+            echo "::error::count-tests.py compare failed (exit $status) --" \
+              "this is a broken ratchet, not a lowered count"
+            exit "$status"
+          fi
+
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+
+      # The labels are read LIVE from the API here, not taken from
+      # `github.event.pull_request.labels` -- the same pattern the `changes`
+      # job above uses for its file list, and for two non-obvious reasons:
+      #
+      #   * Re-running a workflow replays the ORIGINAL event payload, so a
+      #     label added in response to a red ratchet would still be absent
+      #     from `github.event` on the re-run, and the documented escape hatch
+      #     would appear not to work.
+      #   * `pull_request` does not fire on `labeled`, so re-running this job
+      #     is the only way to apply the override without pushing a commit.
+      #
+      # Only reached when a count actually fell, so the green path costs no
+      # API call.
+      - name: Apply Ratchet
+        if: ${{ steps.compare.outputs.status != '0' }}
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+
+          gh api --paginate \
+            "repos/$REPOSITORY/issues/$PR_NUMBER/labels" \
+            --jq '.[].name' > "$RUNNER_TEMP/pr-labels.txt"
+
+          level="error"
+          approved="false"
+          if grep -qxF 'test-removal-approved' "$RUNNER_TEMP/pr-labels.txt"; then
+            level="warning"
+            approved="true"
+          fi
+
+          # One annotation carrying the whole report, with newlines
+          # percent-encoded as the workflow-command format requires. A
+          # line-per-annotation loop would be truncated: GitHub keeps only the
+          # first ten annotations of each level per step, so the detail that
+          # names which files lost assertions is exactly what would be lost.
+          encoded="$(awk '{ gsub(/%/, "%25"); printf "%s%%0A", $0 }' \
+            "$RUNNER_TEMP/ratchet.md")"
+          echo "::${level}::${encoded}"
+
+          if [ "$approved" = "true" ]; then
+            echo "test-removal-approved is on this pull request: the fall" \
+              "above is downgraded to a warning."
+            exit 0
+          fi
+
+          echo "Add the test-removal-approved label and re-run this job to" \
+            "accept the fall above."
+          exit 1
+
+
+  # The red gate (the red gate): a test this pull request adds or changes must
+  # FAIL when it is run against the merge base -- the tree as it was before the
+  # pull request's production change -- or it is asserting something that was
+  # already true, and it would have passed on the day it was written.
+  #
+  # The unit is the registered test suite, in practice the changed test file,
+  # and never the individual test function. That was decided in planning and
+  # the full rationale lives in `.github/scripts/red-gate.py`'s module
+  # docstring: the harness runs every suite in one headless process and emits
+  # exactly one `PASS`/`FAIL` line per registered suite, so a per-function
+  # verdict has no signal to read.
+  #
+  # Which suites are in scope, what the merge-base log means, and what the
+  # report says are all that script's decisions, invoked and never
+  # reimplemented here. This job resolves two trees, runs the engine once
+  # through `.github/scripts/suite-log.sh`, and decides what to do with an
+  # exit code. There is deliberately no embedded program in it that parses a
+  # suite log.
+  #
+  # Pull-request-only, and gated by `github.event_name` rather than by a
+  # trigger filter, for the reason `test-ratchet` gives: a `push` to main and a
+  # `workflow_dispatch` run have no merge base to overlay onto, so there is
+  # nothing to measure and the job reports `skipped` -- which `ci` already
+  # counts as passing.
+  #
+  # Sequenced behind `validate`, not run beside it. The gate's whole claim is
+  # "green on the head, red at the merge base", and the `validate` job is what
+  # establishes the first half -- by running the suite against the checkout,
+  # not by believing a pull request body or a session's completion report. The
+  # `!cancelled() && !failure()` idiom already means "skip me if an upstream
+  # need failed", which is exactly the precondition, and it is the same pattern
+  # the jobs above use. No second full-suite run of the head is
+  # added here; that would be paying twice for a fact a job already proved.
+  #
+  # `contents: read` to see both sides of the merge, `pull-requests: read` to
+  # read the changed-file list and the override label. Nothing is written back
+  # to GitHub: the report goes to `$GITHUB_STEP_SUMMARY` and the annotation
+  # stream, so a fork pull request's read-only token is all this ever needs.
+  red-gate:
+    name: Red Gate
+    needs: [changes, validate]
+    if: >-
+      ${{ !cancelled() && !failure()
+      && github.event_name == 'pull_request'
+      && needs.changes.outputs.tests == 'true' }}
+    runs-on: ubuntu-latest
+    # Backstop only, as `smoke` carries one. What actually bounds this job is
+    # one import pass and one boot of the engine, the same work the `validate` job
+    # does; this catches a runner wedged somewhere outside them.
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      pull-requests: read
+    # Every path this job writes is under ${{ runner.temp }} -- the overlay
+    # worktree, the engine log, the plan and the report are all scratch. Part 5
+    # of the control-plane test suite is an absolute check with an empty allow-list,
+    # and an earlier incident is what it remembers.
+    #
+    # Declared per step rather than once in a job-level `env:`, which would
+    # read better but is not available: the `runner` context is out of scope at
+    # job level, and actionlint says so. `export` and `smoke` above repeat
+    # their paths the same way for the same reason.
+    steps:
+      # `fetch-depth: 0` because both sides of the merge are needed: the
+      # default shallow fetch has no merge base to find, and no merge-base
+      # commit to build a worktree from.
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # No version pin here, deliberately. It lives in exactly one place --
+      # the `setup-toolchain` adapter's own default -- and Part 7 of
+      # the control-plane test suite counts a new literal as a new pin site even when
+      # it happens to match today's value.
+      - name: Setup Toolchain
+        uses: ./.github/actions/setup-toolchain
+
+      - name: Resolve Merge Base
+        id: merge-base
+        shell: bash
+        env:
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+
+          # The pull request's own two endpoints, not `github.sha` -- on a
+          # `pull_request` run that is the ephemeral merge commit, which is not
+          # the tree this pull request's tests have to prove red against.
+          status=0
+          merge_base="$(git merge-base "$HEAD_SHA" "$BASE_SHA")" || status=$?
+
+          if [ "$status" -ne 0 ] || [ -z "$merge_base" ]; then
+            echo "::error::no merge base between head $HEAD_SHA and base" \
+              "$BASE_SHA -- the red gate has nothing to run against"
+            exit 1
+          fi
+
+          echo "Merge base: $merge_base"
+          echo "merge_base=$merge_base" >> "$GITHUB_OUTPUT"
+
+      - name: Plan The Gate
+        id: plan
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPOSITORY: ${{ github.repository }}
+          MERGE_BASE: ${{ steps.merge-base.outputs.merge_base }}
+          RED_GATE_PLAN_BASE: ${{ runner.temp }}/red-gate/plan-base
+          RED_GATE_CHANGED_FILES: ${{ runner.temp }}/red-gate-files.txt
+          RED_GATE_PLAN: ${{ runner.temp }}/red-gate-plan.json
+        run: |
+          set -euo pipefail
+
+          # A PRISTINE merge-base worktree, separate from the overlaid one the
+          # next step builds. `red-gate.py plan` decides scope by comparing
+          # each changed test file's base version against its head version, so
+          # handing it the overlay -- which has the head's tests in it by
+          # construction -- would make every changed test look unchanged and
+          # the gate would silently apply to nothing. Two worktrees of one
+          # commit, on purpose.
+          #
+          # Detached, and under $RUNNER_TEMP, never a second checkout inside
+          # the tree -- the same shape `test-ratchet` uses.
+          git worktree add --detach "$RED_GATE_PLAN_BASE" "$MERGE_BASE"
+
+          # The pull request's paginated changed-file list, not
+          # `gh pr view --json files` -- that one is GraphQL and stops at the
+          # first 100 files, so a large pull request's test change past that
+          # boundary would read as no change at all. Same reasoning as the
+          # `changes` job's identical read.
+          gh api --paginate \
+            "repos/$REPOSITORY/pulls/$PR_NUMBER/files" \
+            --jq '.[].filename' > "$RED_GATE_CHANGED_FILES"
+
+          status=0
+          python3 .github/scripts/red-gate.py plan \
+            --base-root "$RED_GATE_PLAN_BASE" \
+            --head-root "$GITHUB_WORKSPACE" \
+            --changed-files "$RED_GATE_CHANGED_FILES" \
+            > "$RED_GATE_PLAN" || status=$?
+
+          if [ "$status" -ne 0 ]; then
+            echo "::error::red-gate.py plan failed (exit $status) -- this is a" \
+              "broken gate, not a verdict about this pull request"
+            exit "$status"
+          fi
+
+          status=0
+          applies="$(python3 - "$RED_GATE_PLAN" <<'PY'
+          import json
+          import sys
+
+          with open(sys.argv[1], encoding="utf-8") as handle:
+              print("true" if json.load(handle)["gate_applies"] else "false")
+          PY
+          )" || status=$?
+
+          if [ "$status" -ne 0 ]; then
+            echo "::error::could not read gate_applies out of the plan (exit" \
+              "$status) -- this is a broken gate, not a verdict"
+            exit "$status"
+          fi
+
+          echo "gate_applies=$applies" >> "$GITHUB_OUTPUT"
+
+          if [ "$applies" = "true" ]; then
+            echo "At least one suite is in scope; the merge-base run follows."
+            exit 0
+          fi
+
+          # A pull request whose test changes put no suite in scope neither
+          # passes nor fails this gate, so it finishes green and says so in the
+          # summary rather than reporting a verdict it did not reach.
+          {
+            echo "## Red gate — merge-base verdict"
+            echo
+            echo "This pull request changes no test file whose code changed,"
+            echo "so the gate does not apply: it neither passes nor fails."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # Every scrap of overlay-and-run logic lives in the script, so a local
+      # run and this job mean the same thing (#269's reasoning, applied here).
+      # It exits 0 on a red merge-base run -- that is the expected outcome, not
+      # a failure -- and non-zero only when the run could not be attempted at
+      # all, which is exactly when this step should fail.
+      - name: Run The Merge Base With This Pull Request's Tests
+        if: ${{ steps.plan.outputs.gate_applies == 'true' }}
+        shell: bash
+        env:
+          MERGE_BASE: ${{ steps.merge-base.outputs.merge_base }}
+          RED_GATE_OVERLAY: ${{ runner.temp }}/red-gate/overlay
+          RED_GATE_BASE_LOG: ${{ runner.temp }}/red-gate/overlay/base-run.log
+        run: |
+          set -euo pipefail
+
+          .github/scripts/suite-log.sh \
+            --merge-base "$MERGE_BASE" \
+            --scratch "$RED_GATE_OVERLAY" \
+            --head-root "$GITHUB_WORKSPACE" \
+            --log "$RED_GATE_BASE_LOG"
+
+      - name: Judge The Merge-Base Run
+        id: verdict
+        if: ${{ steps.plan.outputs.gate_applies == 'true' }}
+        shell: bash
+        env:
+          RED_GATE_PLAN: ${{ runner.temp }}/red-gate-plan.json
+          RED_GATE_BASE_LOG: ${{ runner.temp }}/red-gate/overlay/base-run.log
+          RED_GATE_REPORT: ${{ runner.temp }}/red-gate-report.md
+        run: |
+          set -euo pipefail
+
+          # `status=0; cmd || status=$?`, never `if ! cmd` and never
+          # `cmd | tee`. project-validate.sh:43-48 documents why in this
+          # repository's own words: after a negated command $? is the status of
+          # the negation, and in a pipeline it is the last command's -- either
+          # way the violation gets reported and the step still exits 0. A gate
+          # that reports a violation and exits 0 is worse than no gate.
+          status=0
+          python3 .github/scripts/red-gate.py verdict \
+            --plan "$RED_GATE_PLAN" \
+            --base-log "$RED_GATE_BASE_LOG" \
+            > "$RED_GATE_REPORT" || status=$?
+
+          # Unconditionally -- pass, fail, or downgrade. The per-suite
+          # red/green result is required to be readable on every run, not only
+          # on the runs that fail.
+          cat "$RED_GATE_REPORT" >> "$GITHUB_STEP_SUMMARY"
+
+          # 1 is "a suite was green at the merge base", which the label below
+          # may downgrade. Anything else is the tool failing to reach a verdict
+          # at all (2 is an unusable plan or an empty log), and that is not a
+          # characterization-test decision, so no label downgrades it -- fail
+          # here, before the branch can reach it.
+          if [ "$status" -ne 0 ] && [ "$status" -ne 1 ]; then
+            echo "::error::red-gate.py verdict failed (exit $status) -- this" \
+              "is a broken gate, not a lowered bar"
+            exit "$status"
+          fi
+
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+
+      # The labels are read LIVE from the API here, not taken from
+      # `github.event.pull_request.labels`, for two non-obvious reasons -- the
+      # same two `test-ratchet` gives for its own override label:
+      #
+      #   * Re-running a workflow replays the ORIGINAL event payload, so a
+      #     label added in response to a red gate would still be absent from
+      #     `github.event` on the re-run, and the documented escape hatch would
+      #     appear not to work.
+      #   * `pull_request` does not fire on `labeled`, so re-running this job
+      #     is the only way to apply the override without pushing a commit.
+      #
+      # Guarded on `gate_applies` as well as on the status: a skipped `verdict`
+      # step has no outputs at all, and an empty string is not `0`.
+      #
+      # A broken gate cannot reach this step either, and that is load-bearing
+      # rather than lucky. An `if:` carrying no status-check function has
+      # `success()` implied, so the moment `verdict` exits 2 this step is
+      # skipped along with the rest of the job -- the label branch is never
+      # offered a failure that was not a verdict. `test-ratchet` above depends
+      # on exactly the same implication for exactly the same reason.
+      - name: Apply Red Gate
+        if: >-
+          ${{ steps.plan.outputs.gate_applies == 'true'
+          && steps.verdict.outputs.status != '0' }}
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPOSITORY: ${{ github.repository }}
+          RED_GATE_REPORT: ${{ runner.temp }}/red-gate-report.md
+          RED_GATE_LABELS: ${{ runner.temp }}/red-gate-labels.txt
+        run: |
+          set -euo pipefail
+
+          gh api --paginate \
+            "repos/$REPOSITORY/issues/$PR_NUMBER/labels" \
+            --jq '.[].name' > "$RED_GATE_LABELS"
+
+          level="error"
+          approved="false"
+          if grep -qxF 'characterization-test' "$RED_GATE_LABELS"; then
+            level="warning"
+            approved="true"
+          fi
+
+          # One annotation carrying the whole report, with newlines
+          # percent-encoded as the workflow-command format requires. A
+          # line-per-annotation loop would be truncated: GitHub keeps only the
+          # first ten annotations of each level per step, so the detail that
+          # names the offending suite is exactly what would be lost.
+          encoded="$(awk '{ gsub(/%/, "%25"); printf "%s%%0A", $0 }' \
+            "$RED_GATE_REPORT")"
+          echo "::${level}::${encoded}"
+
+          if [ "$approved" = "true" ]; then
+            echo "characterization-test is on this pull request: the suite" \
+              "that was green at the merge base is downgraded to a warning."
+            exit 0
+          fi
+
+          echo "The suite named above passed against the merge base with this" \
+            "pull request's tests overlaid, so its test asserts nothing this" \
+            "pull request changed. Make the test depend on the change, or add" \
+            "the characterization-test label and re-run this job to accept it."
+          exit 1
+
+  ci:
+    name: ci
+    # TODO: every verification job you add goes in this list, and nowhere
+    # else. A job missing from here runs, can fail, and merges anyway --
+    # which is the silent hole the single-aggregate pattern exists to close.
+    needs: [changes, validate, actionlint, test-ratchet, red-gate]
+    if: always()
+    runs-on: ubuntu-latest
+    permissions: {}
+    steps:
+      - name: Check Required Jobs
+        shell: bash
+        env:
+          NEEDS_JSON: ${{ toJSON(needs) }}
+        run: |
+          set -euo pipefail
+
+          python3 - <<'PY'
+          import json
+          import os
+          import sys
+
+          needs = json.loads(os.environ["NEEDS_JSON"])
+          passing = {"success", "skipped"}
+
+          failed = sorted(
+              job_id for job_id, data in needs.items()
+              if data.get("result") not in passing
+          )
+
+          if failed:
+              for job_id in failed:
+                  result = needs[job_id].get("result", "unknown")
+                  print(f"::error::{job_id} did not pass (result={result})")
+              sys.exit(1)
+
+          print("All needed jobs passed or were skipped: "
+                + ", ".join(sorted(needs)))
+          PY

@@ -6,10 +6,12 @@ This is a self-assessment. Nothing certifies anything. Its value is that the
 answers are **checkable** — you run something, or point at a line — rather
 than asserted.
 
-## The load-bearing six
+## The load-bearing six, plus one
 
 A system holding these is recognisably this architecture even if it holds
-nothing else. A system breaking any of them is a different architecture and
+nothing else. **MRG-1** is listed with them not because the architecture
+depends on it, but because without it the architecture is dangerous — see
+level 0 below. A system breaking any of them is a different architecture and
 will fail in the ways the rest of the rules were written to prevent.
 
 | Rule | Check | Broken looks like |
@@ -20,10 +22,27 @@ will fail in the ways the rest of the rules were written to prevent.
 | **CTX-1** Isolation by not fetching | Print each prompt; find the forbidden item | Reviews that agree with the author's reasoning |
 | **HND-1** Durable artifacts at boundaries | Kill a session; is the next stage still runnable? | A pipeline that restarts rather than resumes |
 | **HND-3** Cold-start test | Hand an item to someone who read nothing else | Tasks only their planner understands |
+| **MRG-1** A machine verdict cannot merge | Try to merge on an agent verdict alone | Nobody notices — everything is green |
 
 Anything failing here is not a gap to schedule. It is the thing to fix first.
 
 ## Levels
+
+### Level 0 — Safe to run at all
+
+Deliberately numbered below level 1, because it is a **precondition**, not a
+stage of maturity. Before any agent runs against a repository:
+
+- **MRG-1, MRG-2, MRG-3, MRG-6** — a machine verdict cannot merge; protection
+  is configured rather than conventional; the writing identity cannot approve;
+  no role can merge.
+- **INT-1** — one aggregate check, which is what protection names.
+- **SEC-1, SEC-3** — least privilege per role; no publishing credential inside
+  a session.
+
+A pipeline missing these is not an immature implementation of this
+architecture. It is an unreviewed-code-merging machine with an agent attached,
+and everything else here makes it faster.
 
 ### Level 1 — Structurally sound
 
@@ -71,8 +90,8 @@ anything but configuration — and hand a work item to a person instead.
 
 ### Level 4 — Measured
 
-Level 3, plus **OBS-6** (the ledger), **OBS-7** (the pipeline's own logic
-tested), and the full **GAT** set.
+Level 3, plus **OBS-6** (the ledger), **OBS-7** / **INT-7** (the pipeline's
+own logic tested), and the full **GAT** and **INT** sets.
 
 At level 4 you can answer *which role fails most, at which tier* from data,
 which is the first point at which tuning beats guessing.
@@ -150,6 +169,34 @@ count.
 - [ ] Dispatching a correction against an undecidable verdict is refused
 - [ ] The correction cap exists and escalation is a defined action
 - [ ] Undispatchable work is flagged from declared scope, not by memory
+
+**Continuous integration**
+- [ ] Add a deliberately failing job → the aggregate goes red, merge blocked,
+      no settings touched
+- [ ] A prose-only change reports rather than hangs
+- [ ] A file in a new top-level directory still runs validation
+- [ ] Point at the single validation script; run it by hand
+- [ ] Remove the toolchain → the output says nothing ran, not that it failed
+- [ ] An agent push has a check result attached to that SHA
+- [ ] Every third-party download verifies a checksum before use
+
+**Merge policy**
+- [ ] A proposal with a passing agent verdict and no human approval **cannot
+      be merged** — refused by the platform, not by convention
+- [ ] A direct push to the integration branch is refused
+- [ ] The implementer's credential cannot approve a review
+- [ ] No pipeline credential holds merge permission
+- [ ] An agent touching an owned path still requires the owner's review
+- [ ] A recent integration commit maps to exactly one work item
+
+**Security**
+- [ ] Tabulate each role's granted scopes against what it does; surplus is a
+      finding
+- [ ] An item scoped to pipeline configuration is flagged before any session
+- [ ] The session environment holds no push or publish credential
+- [ ] An item body attempting to redirect a session is framed as quoted data,
+      and capability removal makes it inert regardless
+- [ ] A test credential committed to a branch is caught
 
 ## Common shapes of non-conformance
 

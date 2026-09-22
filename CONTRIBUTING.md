@@ -10,7 +10,7 @@ substrates** — never Issues, labels, pipelines, `gh`, or any vendor's name.
 
 Test: could someone on a stack you have never heard of follow it? Could
 someone with no stack at all — a shell and a directory — follow it? If not,
-rewrite it, or move it to [`docs/realizations/`](docs/realizations/).
+rewrite it, or move it to [`templates/github-actions/`](templates/github-actions/).
 
 A rule that can only be obeyed on one platform is not a rule. It is a
 realization detail.
@@ -63,7 +63,7 @@ close to the limit of what anyone will read; a new group needs to earn itself.
 ## Adding a realization
 
 Follow the checklist in
-[`docs/realizations/README.md`](docs/realizations/README.md). In short:
+[`templates/github-actions/README.md`](templates/github-actions/README.md). In short:
 structure it as **C1–C7**; name the marker primitive first and say whether a
 non-admin can set it from a phone; show the capability translation in both
 postures; say what the automation identity may **not** do; map every
@@ -74,7 +74,7 @@ A realization that reports no failures has not been assessed.
 
 ## Code in this repository
 
-Only inside `docs/realizations/`, and only when it demonstrates a contract.
+Only inside `templates/github-actions/`, and only when it demonstrates a contract.
 
 - **Copy-pasteable** — no repo-relative references that resolve only here.
 - **Every consumer-edited seam marked `TODO`.**

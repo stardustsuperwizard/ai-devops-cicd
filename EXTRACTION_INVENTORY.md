@@ -32,7 +32,7 @@ workflows call those rather than the tools. The port inherits that seam.
 
 | | |
 | --- | --- |
-| ✅ | Realized in `docs/realizations/github-actions/` |
+| ✅ | Realized in `templates/github-actions/github-actions/` |
 | 📄 | Reasoning extracted into `docs/rationale/`, and distilled into `RULES.md` |
 | ⬜ | Not yet ported |
 | 🎮 | Godot-specific — belongs in `examples/`, not in a realization |
@@ -52,49 +52,49 @@ These need no genericization beyond a comment or two.
 | `.github/scripts/classify-claude-outcome.py` | 315 | **C4** outcome classifier | ✅ |
 | `.github/scripts/model_response.py` | 86 | Shared outcome reader | ✅ |
 | `.github/scripts/bootstrap-labels.sh` | 122 | Marker vocabulary | ✅ |
-| `.github/scripts/sync-issue-dependencies.py` | 579 | Dependency wiring | ⬜ |
-| `.github/scripts/sync-human-credentials-label.py` | 489 | 🔑 detection | ⬜ |
-| `.github/scripts/render-pipeline-report.py` | 840 | Metrics reporting | ⬜ |
-| `.github/scripts/pipeline_metrics.py` | 474 | Metrics | ⬜ |
-| `.github/scripts/red-main.py` | 461 | Base-branch escalation | ⬜ |
-| `.github/scripts/issue_dependencies.py` | 324 | Dependency parsing | ⬜ |
-| `.github/scripts/ledger_row.py` | 285 | Run ledger | ⬜ |
-| `.github/workflows/issue-linking.yml` | 683 | Dispatch bookkeeping | ⬜ |
-| `.github/workflows/run-ledger.yml` | 590 | Cost/outcome ledger | ⬜ |
-| `.github/workflows/red-main.yml` | 474 | Scheduled base-branch run | ⬜ |
-| `.github/workflows/agent-00-dashboard.yml` | 245 | **C7** control plane | ⬜ |
-| `.github/workflows/issue-dependencies.yml` | 215 | Dependency wiring | ⬜ |
-| `.github/workflows/pipeline-report.yml` | 199 | Metrics | ⬜ |
-| `.github/workflows/issue-local-session.yml` | 167 | Local-session bridge | ⬜ |
+| `.github/scripts/sync-issue-dependencies.py` | 579 | Dependency wiring | ✅ |
+| `.github/scripts/sync-human-credentials-label.py` | 489 | 🔑 detection | ✅ |
+| `.github/scripts/render-pipeline-report.py` | 840 | Metrics reporting | ✅ |
+| `.github/scripts/pipeline_metrics.py` | 474 | Metrics | ✅ |
+| `.github/scripts/red-main.py` | 461 | Base-branch escalation | ✅ |
+| `.github/scripts/issue_dependencies.py` | 324 | Dependency parsing | ✅ |
+| `.github/scripts/ledger_row.py` | 285 | Run ledger | ✅ |
+| `.github/workflows/issue-linking.yml` | 683 | Dispatch bookkeeping | ✅ |
+| `.github/workflows/run-ledger.yml` | 590 | Cost/outcome ledger | ✅ |
+| `.github/workflows/red-main.yml` | 474 | Scheduled base-branch run | ✅ |
+| `.github/workflows/agent-00-dashboard.yml` | 245 | **C7** control plane | ✅ |
+| `.github/workflows/issue-dependencies.yml` | 215 | Dependency wiring | ✅ |
+| `.github/workflows/pipeline-report.yml` | 199 | Metrics | ✅ |
+| `.github/workflows/issue-local-session.yml` | 167 | Local-session bridge | ✅ |
 
 ## Tier 2 — light genericization (1–9 matches, mostly comments)
 
 | File | Lines | What to change | Status |
 | --- | --- | --- | --- |
-| `.github/workflows/agent-02-implement.yml` | 2,629 | Swap `validate-godot.sh` calls for the adapter contract | ⬜ |
-| `.github/workflows/agent-01-planner.yml` | 2,255 | Rubric examples reference game concepts | ⬜ |
-| `.github/workflows/agent-05-fix.yml` | 1,069 | Two validation-command references | ⬜ |
-| `.github/workflows/agent-06-triage.yml` | 863 | Three example strings | ⬜ |
-| `.github/scripts/build-plan-review-request.py` | 803 | Example plan fixtures | ⬜ |
-| `.github/workflows/agent-04-review.yml` | 630 | Template written ✅; full port still ⬜ | ✅ (template) |
-| `.github/scripts/red-gate.py` | 641 | Suite-discovery hook → adapter | ⬜ |
-| `.github/scripts/count-tests.py` | 468 | Assertion pattern → adapter | ⬜ |
-| `.github/scripts/render-dashboard.py` | 506 | **C7**; ⚠️/🔑 file patterns → config | ⬜ |
-| `.github/agents/01-planner.agent.md` | 442 | Domain examples | ⬜ |
-| `.github/agents/07-plan-reviewer.agent.md` | 367 | Domain examples | ⬜ |
+| `.github/workflows/agent-02-implement.yml` | 2,629 | Swap `validate-godot.sh` calls for the adapter contract | ✅ |
+| `.github/workflows/agent-01-planner.yml` | 2,255 | Rubric examples reference game concepts | ✅ |
+| `.github/workflows/agent-05-fix.yml` | 1,069 | Two validation-command references | ✅ |
+| `.github/workflows/agent-06-triage.yml` | 863 | Three example strings | ✅ |
+| `.github/scripts/build-plan-review-request.py` | 803 | Example plan fixtures | ✅ |
+| `.github/workflows/agent-04-review.yml` | 630 | **C2** fetch list is the point | ✅ |
+| `.github/scripts/red-gate.py` | 641 | Suite-discovery hook → adapter | ✅ |
+| `.github/scripts/count-tests.py` | 468 | Assertion pattern → adapter | ✅ |
+| `.github/scripts/render-dashboard.py` | 506 | **C7**; ⚠️/🔑 file patterns → config | ✅ |
+| `.github/agents/01-planner.agent.md` | 442 | Domain examples | ✅ |
+| `.github/agents/07-plan-reviewer.agent.md` | 367 | Domain examples | ✅ |
 | `.github/workflows/release.yml` | 367 | Export step → adapter | ⬜ |
-| `.github/scripts/task_scope.py` | 291 | ⚠️ extension list → config | ⬜ |
-| `.github/actions/build-review-request/action.yml` | 352 | **C2** — the `body`-omission is the point | ⬜ |
-| `.github/actions/build-fix-request/action.yml` | 280 | **C2** | ⬜ |
-| `.github/actions/build-plan-review-request/action.yml` | 247 | **C2** | ⬜ |
+| `.github/scripts/task_scope.py` | 291 | ⚠️ extension list → config | ✅ |
+| `.github/actions/build-review-request/action.yml` | 352 | **C2** — the `body`-omission is the point | ✅ |
+| `.github/actions/build-fix-request/action.yml` | 280 | **C2** | ✅ |
+| `.github/actions/build-plan-review-request/action.yml` | 247 | **C2** | ✅ |
 | `.github/scripts/release-preflight.py` | 252 | Version-file path → config | ⬜ |
-| `.github/agents/02-implementer.agent.md` | 231 | Validation command | ⬜ |
-| `.github/workflows/agent-03-rollup.yml` | 200 | One string | ⬜ |
-| `.github/agents/05-fixer.agent.md` | 114 | Two strings | ⬜ |
-| `.github/agents/03-reviewer.agent.md` | 74 | Two strings | ⬜ |
+| `.github/agents/02-implementer.agent.md` | 231 | Validation command | ✅ |
+| `.github/workflows/agent-03-rollup.yml` | 200 | One string | ✅ |
+| `.github/agents/05-fixer.agent.md` | 114 | Two strings | ✅ |
+| `.github/agents/03-reviewer.agent.md` | 74 | Two strings | ✅ |
 | `.claude/agents/*.md`, `.claude/commands/*.md` | 2,558 | Local role counterparts; dual `gh` / MCP call sites | ⬜ |
-| `.github/ISSUE_TEMPLATE/*` | 599 | Intake templates — the cold-start contract | ⬜ |
-| `.github/pull_request_template.md` | 71 | Incl. the no-originating-issue marker trick | ⬜ |
+| `.github/ISSUE_TEMPLATE/*` | 599 | Intake templates — the cold-start contract | ✅ |
+| `.github/pull_request_template.md` | 71 | Incl. the no-originating-issue marker trick | ✅ |
 | `.github/copilot-instructions.md` | 294 | Repo-conventions pattern | ⬜ |
 | `.github/skills/code-review/SKILL.md` | 94 | | ⬜ |
 | `.claude/hooks/*.sh` | 164 | Session-start + boundary guard | ⬜ |
@@ -163,27 +163,31 @@ is not portable. Filed under *Next up*, below.
 ## Port order
 
 Each step is independently useful and independently verifiable. This is also
-the order [`docs/building/build-guide.md`](docs/building/build-guide.md)
+the order [`docs/adaptation/03-procedure.md`](docs/adaptation/03-procedure.md)
 recommends building from scratch, which is not a coincidence.
 
 | # | Work | Files | Unlocks |
 | --- | --- | --- | --- |
-| **1** ✅ | Session runner + classifiers + verdict + labels + one role | 6 | Any role can be built |
-| **2** | The three prompt-assembler composite actions (**C2**) | 3 | Reviewer/fixer/plan-reviewer prompts |
-| **3** | The planner workflow + plan validation | 2 | Epic → tasks |
-| **4** | The implementer workflow + `validation:failed` | 1 | Task → PR |
-| **5** | The fixer + escalation cap | 1 | The correction loop |
-| **6** | Issue templates + PR template | 7 | The cold-start contract |
-| **7** | Dependency wiring (`sync-issue-dependencies.py` + workflow) | 3 | Ordered dispatch |
-| **8** | Control-plane renderer (**C7**) | 2 | The board |
-| **9** | Quality gates: ratchet, red gate, base-branch run | 6 | The gates |
-| **10** | Run ledger + pipeline metrics | 5 | Cost measurement |
-| **11** | Local role counterparts (`.claude/`) | 12 | Desktop/mobile parity |
-| **12** | Triage + rollup | 2 | Backlog hygiene |
-| **13** | The control-plane test harness | 1 | Confidence in all of it |
+| **1** ✅ | Session runner, classifiers, verdict extraction, marker bootstrap | 6 | Any role can be built |
+| **2** ✅ | The prompt-assembler composite actions (**C2**) | 3 | Every role's fetch list |
+| **3** ✅ | All four role workflows + triage + rollup | 6 | The full control plane |
+| **4** ✅ | Intake and proposal templates | 7 | The cold-start contract |
+| **5** ✅ | Dependency wiring, ledger, metrics, renderer (**C7**) | 10 | Ordered dispatch, cost, the board |
+| **6** ✅ | CI: aggregate check, test ratchet, red gate, base-branch run | 5 | The verification plane |
+| **7** ✅ | The four toolchain adapters | 4 | The only language-specific seam |
+| **8** | Local role counterparts (`.claude/`) | 12 | Desktop/mobile parity |
+| **9** | The control-plane test harness | 1 | Confidence in all of it |
 
-Steps 2–5 are the critical path. Everything from 7 down is independently
-valuable and can be reordered freely.
+Steps 1–7 landed. What remains is parity for local sessions and the
+control plane's own test suite — both independently valuable.
+
+## Deliberately out of scope
+
+**Release and deployment.** `release.yml` (367 lines), `release-preflight.py`
+(252) and `docs/RELEASING.md` are not ported, by decision: deployment is
+determined almost entirely by what you ship, and a guide that hedged its way
+through it would be worth less than saying plainly that it stops at a merged,
+verified change. See [`docs/PIPELINE.md`](docs/PIPELINE.md).
 
 ## Next up (documentation gaps, not ports)
 
@@ -192,8 +196,8 @@ valuable and can be reordered freely.
 - `rationale/11-measurement.md` — the run ledger: what to record per session and
   what it tells you
 - `rationale/12-spec-traceability.md` — machine-checkable spec↔code links
-- `docs/realizations/jenkins/` — working shared-library code for C3, currently
-  only sketched in [`docs/realizations/jira-jenkins.md`](docs/realizations/jira-jenkins.md)
+- `templates/github-actions/jenkins/` — working shared-library code for C3, currently
+  only sketched in [`templates/github-actions/`](templates/github-actions/)
 
 ## Re-running this survey
 

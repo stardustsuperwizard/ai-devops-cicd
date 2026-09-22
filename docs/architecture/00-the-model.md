@@ -1,8 +1,8 @@
 # The model
 
-The abstract machine. No language, no tools, no services — those are
-[realizations](../realizations/), and the point of this page is that the
-architecture does not depend on which you have.
+The abstract machine. No language, no tools, no services — those belong to a
+[concrete implementation](../../templates/github-actions/), and the point of
+this page is that the architecture does not depend on which you have.
 
 ## Entities
 

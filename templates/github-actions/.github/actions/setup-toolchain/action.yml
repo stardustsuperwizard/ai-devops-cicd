@@ -1,0 +1,74 @@
+name: Setup Toolchain
+
+# TOOLCHAIN ADAPTER — 2 of 4. This file is meant to be rewritten.
+#
+# Installs whatever `project-validate.sh` and `format-code` need, and
+# nothing else. Every workflow that will run either one calls this first.
+#
+# It exists as its own action rather than a few inline steps for one
+# reason: a workflow that forgets it does not fail loudly. It fails as
+# `project-validate.sh` exiting 127, which a caller that conflates exit
+# codes reports as a red build — sending you to debug a test suite that
+# never ran. One named step is much harder to omit than three unnamed ones.
+#
+# ── The contract ─────────────────────────────────────────────────────────
+#
+#   After this action, `command -v <your tool>` succeeds on the runner.
+#
+# That is the whole contract. How you get there — a setup-* action, a
+# package manager, a cached download, a container — is yours.
+#
+# ── Adapting it ──────────────────────────────────────────────────────────
+#
+# Replace the steps. Keep `toolchain-version` as an input even if you pin a
+# single version: callers already pass it, and a version you can override
+# from a workflow is how you test an upgrade without a commit to this file.
+#
+# Cache aggressively. This runs on every agent session, and a two-minute
+# install repeated across four roles and three fix rounds is real money.
+
+description: >-
+  Installs the project toolchain so that project-validate.sh and
+  format-code can run. TODO: adapt for your project.
+
+inputs:
+  toolchain-version:
+    description: >-
+      Version to install. Empty means the project default — TODO: decide
+      where that default lives (a .tool-versions file, a pin below, or a
+      repository variable).
+    required: false
+    default: ""
+
+runs:
+  using: composite
+  steps:
+    # TODO: replace everything below.
+    #
+    # Typical shapes:
+    #
+    #   actions/setup-node@v4     with node-version
+    #   actions/setup-python@v5   with python-version + cache: pip
+    #   actions/setup-go@v5       with go-version
+    #   actions/setup-java@v4     with distribution + java-version
+    #   a download + cache pair, for a toolchain with no setup action
+    #
+    # Whatever you use, end with the verification step below. An install
+    # that silently half-succeeded is exactly the failure this action
+    # exists to prevent.
+    - name: Install Toolchain
+      shell: bash
+      env:
+        TOOLCHAIN_VERSION: ${{ inputs.toolchain-version }}
+      run: |
+        set -euo pipefail
+        echo "::error::setup-toolchain has not been adapted for this project."
+        echo "Edit .github/actions/setup-toolchain/action.yml."
+        exit 1
+
+    - name: Verify Toolchain
+      shell: bash
+      run: |
+        set -euo pipefail
+        # TODO: the same executable project-validate.sh guards on.
+        command -v "${TOOLCHAIN_BIN:-<your-build-tool>}"

@@ -94,7 +94,7 @@ do not.
 | Change proposal | Pull request | Branch + PR in the SCM | Merge request |
 | Verdict | PR comment + label | Jira comment + status field | MR note + label |
 
-See [`../realizations/jira-jenkins.md`](../realizations/jira-jenkins.md) for the
+See [`../../templates/github-actions/`](../../templates/github-actions/) for the
 full mapping and the primitives each one has to supply.
 
 ## Tool-agnostic by construction

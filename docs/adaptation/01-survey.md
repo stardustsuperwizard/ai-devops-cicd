@@ -1,7 +1,7 @@
 # Substrate worksheet
 
 Copy this file into your project and fill it in **before writing any code**.
-Phase 0 of [`build-guide.md`](build-guide.md) is complete when every row has an
+Phase 0 of [`03-procedure.md`](03-procedure.md) is complete when every row has an
 answer and every gap has a named degradation from
 [`../architecture/02-substrate.md`](../architecture/02-substrate.md#degradations).
 
