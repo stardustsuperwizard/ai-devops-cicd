@@ -1,0 +1,130 @@
+name: Format Code
+
+# TOOLCHAIN ADAPTER — 3 of 4. This file is meant to be rewritten.
+#
+# The deterministic formatter, and any lint findings the formatter cannot
+# touch. Two modes, two callers:
+#
+#   mode: check   the reviewer, before judging a diff — never modifies files
+#   mode: fix     the implementer, before opening a pull request — applies
+#
+# ── Why this is a separate adapter from project-validate.sh ──────────────
+#
+# Formatting is APPLIED, not checked. A pipeline that fails a build over
+# whitespace burns an entire agent round on something a tool fixes for free
+# — and the agent's fix for "the formatter is unhappy" is frequently worse
+# than the formatter's.
+#
+# This is RULES.md GAT-9: deterministic tooling runs first and
+# unconditionally; only the residue it cannot fix is worth a model, scoped
+# to exactly that residue. Never spend a session on work a tool does
+# correctly for nothing.
+#
+# ── Why diff-scoped, not whole-repo ──────────────────────────────────────
+#
+# `files-list-file` is a list of the paths the change actually touched.
+# That is deliberate: introduced onto an existing codebase, a whole-repo
+# formatter reformats thousands of untouched lines, and the real change
+# becomes unreviewable. Diff scoping holds new and touched code to the
+# standard immediately without blocking it behind legacy debt.
+#
+# An empty or missing list is a clean no-op — the formatter is not even
+# installed. Entries not present in the working tree (a change's deleted
+# paths) are dropped, so a list left with nothing on disk is that same
+# no-op.
+#
+# ── Adapting it ──────────────────────────────────────────────────────────
+#
+# Replace the run step. Keep the three outputs exactly — callers branch on
+# `formatted` to decide whether to make a commit, and quote `report-file`
+# into the review prompt.
+
+description: >-
+  Runs the project formatter (and any linter it cannot auto-fix) against a
+  list of changed files, and writes one Markdown report.
+  TODO: adapt for your project.
+
+inputs:
+  mode:
+    description: '"check" to report only, or "fix" to apply formatting for real'
+    required: true
+  files-list-file:
+    description: >-
+      Path to a file listing one changed path per line. Empty or missing is
+      a clean no-op.
+    required: true
+
+outputs:
+  report-file:
+    description: Path to a Markdown report, written even when clean
+    value: ${{ runner.temp }}/format-report.md
+  clean:
+    description: '"true" if the formatter and linter reported nothing'
+    value: ${{ steps.run.outputs.clean }}
+  formatted:
+    description: >-
+      "true" if fix mode actually changed one or more files. Always "false"
+      in check mode — check mode never writes.
+    value: ${{ steps.run.outputs.formatted }}
+
+runs:
+  using: composite
+  steps:
+    - name: Run Formatter
+      id: run
+      shell: bash
+      env:
+        MODE: ${{ inputs.mode }}
+        FILES_LIST: ${{ inputs.files-list-file }}
+      run: |
+        set -euo pipefail
+
+        REPORT="$RUNNER_TEMP/format-report.md"
+        : > "$REPORT"
+
+        # Drop entries that no longer exist on disk (deleted paths).
+        TARGETS="$RUNNER_TEMP/format-targets.txt"
+        : > "$TARGETS"
+        if [ -s "$FILES_LIST" ]; then
+          while IFS= read -r p; do
+            [ -n "$p" ] && [ -f "$p" ] && printf '%s\n' "$p" >> "$TARGETS"
+          done < "$FILES_LIST"
+        fi
+
+        # The no-op path. Nothing is installed, nothing runs, clean is true.
+        if [ ! -s "$TARGETS" ]; then
+          echo "No files to format." >> "$REPORT"
+          echo "clean=true"      >> "$GITHUB_OUTPUT"
+          echo "formatted=false" >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
+
+        # TODO: install your formatter here, only now that there is work.
+        #   pip install <formatter>   /   npm ci   /   go install …
+
+        clean=true
+        formatted=false
+
+        if [ "$MODE" = "fix" ]; then
+          # TODO: apply formatting in place, e.g.
+          #   xargs -a "$TARGETS" <formatter> --write
+          #
+          # Then detect whether anything actually changed. `git diff
+          # --quiet` exits 1 when there are changes, which is the signal —
+          # do not let `set -e` treat that as failure.
+          if ! git diff --quiet -- $(tr '\n' ' ' < "$TARGETS"); then
+            formatted=true
+          fi
+        else
+          # TODO: check only; must not write. e.g.
+          #   xargs -a "$TARGETS" <formatter> --check || clean=false
+          :
+        fi
+
+        # TODO: run the linter here, in BOTH modes, after any fix — its
+        # findings are what the agent fixer is scoped to, and they are the
+        # part the formatter cannot mechanically resolve.
+        #   xargs -a "$TARGETS" <linter> >> "$REPORT" || clean=false
+
+        echo "clean=$clean"          >> "$GITHUB_OUTPUT"
+        echo "formatted=$formatted"  >> "$GITHUB_OUTPUT"
