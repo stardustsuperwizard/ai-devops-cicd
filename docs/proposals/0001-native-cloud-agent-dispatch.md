@@ -202,8 +202,7 @@ A planner whose degenerate plan is "one task, this one".
   conversation's recommendation was yes at first, because splitting is where
   scope is decided; drop it once splits are reliably right. "Leave it as one"
   can auto-assign.
-- **Needs a user token** to assign. gladiator-engine removed its last PAT
-  (`PROJECT_TOKEN`) deliberately; this reintroduces one.
+- **Needs a user token** to assign. See [5.5](#55-credentials--what-needs-a-user-token-and-what-doesnt).
 
 The planner and plan-reviewer prompts mostly carry over: what makes a good
 task, dependencies, acceptance criteria. The dispatch machinery around them
@@ -287,6 +286,61 @@ chat-style loop: `/review` → verdict → `@copilot` → `/review`.
 The owner's framing: *the reviewer can still tell Copilot to look at the
 review afterwards.* That is the FIX → `@copilot` edge above.
 
+### 5.5 Credentials — what needs a user token, and what doesn't
+
+**Owner's decision (2026-10-18): a user token is a deliberate choice, not a
+problem.** SEC-1 is bent knowingly in exchange for automation.
+
+Why one is needed at all: ✅ the assignment APIs accept user tokens only (PAT,
+OAuth, or a GitHub App acting as a user). `GITHUB_TOKEN` and App installation
+tokens are rejected. ⚠️ Presumably because a Copilot session runs against a
+user's licence and AI credits, and `github-actions` has neither.
+
+| Action | Needs the user token? |
+| --- | --- |
+| Intake assigns Copilot to an Issue (with `model`, `customAgent`) | **Yes** |
+| A merge triggers assignment of the tasks it unblocked | **Yes** — same call |
+| The reviewer posts `@copilot <findings>` | **Maybe** — ❓ Q1. If Copilot ignores `github-actions[bot]`, the comment is posted with the user token. |
+| A human assigns Copilot in the UI or on mobile | No |
+| A human types `@copilot` on a PR | No |
+| CI checks; the reviewer reading the PR and publishing its verdict and required check | No — `GITHUB_TOKEN` |
+
+So the token buys automation layered on the manual flow, nothing more. A
+token-free start is possible: the owner assigns by hand, the reviewer runs in
+CI, and the token is added when intake should dispatch on its own.
+
+Options:
+
+- **Fine-grained PAT**, scoped to the one repository: metadata read; actions,
+  contents, issues, pull requests read/write. Expires; needs rotation. ⚠️ One
+  community report of `model` failing with this token type (Q6) — test first.
+- **Classic PAT** with `repo`. Simplest; covers every repository the owner can
+  reach.
+- **GitHub App user-to-server token.** Short-lived and refreshable. Cleanest,
+  and the most setup.
+
+Whichever: everything done through it is attributed to the owner and spends
+the owner's Copilot plan.
+
+### 5.6 Publishing — Copilot pushes its own commits
+
+The cloud agent commits and pushes to its branch from inside its session. That
+is CAP-6 / SEC-3 ("sessions don't publish") not holding as written. What
+matters is which of the rule's two purposes is actually lost.
+
+| Purpose of the rule | With the cloud agent |
+| --- | --- |
+| **Output is inspectable before it leaves the runner** | **Partly lost.** Work-in-progress commits are public the moment they're pushed — gladiator-engine is a public repository. But they land only on a `copilot/*` branch in a draft PR. Nothing reaches `main` without CI, the reviewer, and a human merge. The draft PR *is* the inspection area; it is just visible while being inspected. |
+| **No push credential in the session or its transcript** | **Handled by the platform, not by us.** GitHub holds the push credential and limits it to the agent's own branch. ✅ Its built-in GitHub MCP server is read-only and scoped to the repository. ⚠️ That the push credential never appears in model context is GitHub's design claim, not something we can verify. |
+
+So this reads as a **substitution** (the property held another way: branch
+isolation plus merge protection), not a loss — **except** that half-finished
+work is publicly visible. For a public game repository that seems an easy
+trade. The case where it would not be: a session committing something it
+should not have (a secret, licensed content) to a public branch before any
+check runs. Secret scanning with push protection (SEC-7) is the platform's
+answer to the first; nothing catches the second before it's public.
+
 ## 6. Open questions
 
 ### Experiments — cheap, and the design depends on them
@@ -296,7 +350,7 @@ review afterwards.* That is the FIX → `@copilot` edge above.
 | ❓ Q1 | Does an `@copilot` comment posted by a workflow trigger Copilot? Under `GITHUB_TOKEN` it comes from `github-actions[bot]`; Copilot acts for users with write access. | The whole FIX loop. If only a user token works, the reviewer's comment-poster holds a user credential. | One throwaway Issue; post `@copilot` both ways. |
 | ❓ Q2 | When Copilot finishes, does it take the PR out of draft, request review, or both, reliably? | The trigger for the full gate and the reviewer. | Same throwaway Issue; watch the PR's events. |
 | ❓ Q3 | Do custom agent `tools:` and `model:` actually apply on GitHub.com? Which wins when `model:` in the profile disagrees with `model` at assignment? | Whether a read-only custom agent is possible on cloud, and where the tier really resolves. | Custom agent with `tools: [read, search]` told to write a file; assert it can't. Pin `model:`; read the session log. |
-| ❓ Q4 | **Can the owner approve a PR Copilot opened at their request?** For Automations the docs say the creating user *can't* approve the resulting PRs. If the same holds for issue assignment, a solo-maintainer repository cannot satisfy MRG-1 with its own approval. | MRG-1 is the highest-consequence rule here. | Assign an Issue as the owner; try to approve the PR. |
+| ❓ Q4 | **Can the owner approve a PR Copilot opened at their request?** For Automations the docs say the creating user *can't* approve the resulting PRs. If the same holds for issue assignment, a solo maintainer can't approve Copilot's PRs on their own repository. | **A practical blocker, not just a rule question.** If branch protection requires an approval and the only human can't give it, Copilot's PRs cannot merge at all. Run this first; it can stop the design on its own. | Assign an Issue as the owner; try to approve the PR. |
 | ❓ Q5 | Can `GITHUB_TOKEN` call `convertPullRequestToDraft`? | Only if draft push-back is wanted. | One workflow run. |
 | ❓ Q6 | Does `model` in the assignment call work with a fine-grained PAT? (Community report says no.) | Which credential type SEC-1 has to tabulate. | Same call, both token types. |
 
@@ -306,7 +360,9 @@ review afterwards.* That is the FIX → `@copilot` edge above.
 - **D2** — Copilot's auto-escalation: what is the round cap before escalation,
   and what is the escalation marker? (`/execute-task` uses four rounds;
   gladiator-engine has `review:design-ambiguity`.)
-- **D3** — Accept reintroducing a user token, and with what scope?
+- **D3** — ~~Accept reintroducing a user token?~~ Accepted (2026-10-18), see
+  5.5. Still open: which token type, and when — at the start, or once intake
+  should dispatch on its own.
 - **D4** — Consolidate deterministic checks into one workflow, or join them
   with `workflow_run`?
 
@@ -315,6 +371,10 @@ review afterwards.* That is the FIX → `@copilot` edge above.
 This repository's rules were written from the system this proposal would
 change. The table is an honest first pass; challenge it.
 
+**Owner's stance (2026-10-18): work first.** Gates and checks should fit into
+the framework, not dictate it. A rule broken here is a recorded choice, not a
+veto. Read the table as "what each choice costs", not "what is forbidden".
+
 | Rule | Effect | Notes |
 | --- | --- | --- |
 | **DEC-2** each role its own session | Holds | Intake, implement, review are separate sessions. Fix becomes a continuation of the implement session; see DEC-3. |
@@ -322,7 +382,7 @@ change. The table is an honest first pass; challenge it.
 | **DEC-5** no orchestrator in the pipeline (SHOULD) | **Tension** | Intake's output includes "assign now / split first", which is close to "which role runs next". Defence: it is a planner whose output is validated data, and automation does the dispatch (HND-4). A reviewer of this proposal should press on this. |
 | **CAP-1** remove capability, don't instruct | Holds for intake and reviewer (CLI sessions, unchanged). **Open** for a cloud read-only custom agent: depends on Q3. |
 | **CAP-5** no sub-agents | Holds, and the platform now enforces it (GitHub.com ✗). |
-| **CAP-6 / SEC-3** sessions don't publish | **DEV** | The cloud agent pushes its own commits to its own branch. Containment: it can only push to `copilot/*`, Actions need approval or a setting, merge stays a human act, and MRG-3 must be checked for the Copilot identity. Record this in the deviation log. |
+| **CAP-6 / SEC-3** sessions don't publish | **SUB, mostly** | The cloud agent pushes its own commits, but only to its own branch, with a platform-held credential; merge protection still stands between it and `main`. The one real loss is that half-finished work is publicly visible. See 5.6. |
 | **CTX-3** reviewer never sees producer's account | Holds; more important | Copilot writes into the PR body; the reviewer's fetch list must keep excluding it. |
 | **CTX-4** implementer sees one item | Holds | One Issue per assignment. Copilot sees the repository, as the CLI implementer did. |
 | **HND-2/3** item is the whole contract; cold start | Holds; more important | Copilot snapshots the Issue at assignment and ignores later comments. The Issue really is the whole contract. |
@@ -341,7 +401,7 @@ change. The table is an honest first pass; challenge it.
 | **INT-4** one validation, three places | Holds if `copilot-setup-steps.yml` calls the same entry point as CI. |
 | **MRG-1** machine verdict never sufficient | **At risk** | Depends on Q4. If the owner can't approve Copilot PRs they requested, a solo repository needs a second human or an outside identity. |
 | **MRG-3** writer can't approve | Check | The Copilot identity and the user token used for assignment both need tabulating. |
-| **SEC-1** narrowest credential per role | **Changes** | A user token for assignment (and possibly for posting `@copilot`, Q1). A fine-grained PAT needs actions, contents, issues and pull requests write, which is broad. |
+| **SEC-1** narrowest credential per role | **Owner's choice** | A user token for assignment (and possibly for posting `@copilot`, Q1), accepted deliberately in exchange for automation. A fine-grained PAT needs actions, contents, issues and pull requests write, which is broad. See 5.5. |
 | **SEC-5** untrusted input is data | Holds | Gate intake and `/review` on write access; public repository. |
 
 ## 8. Explicitly not decided
@@ -407,3 +467,12 @@ the same agent that proposed the design, which is exactly the
 reviewer-reads-the-author's-account problem CTX-3 warns about. Read it
 sceptically. The claims I'm least sure of: the DEC-5 defence, and whether Q4
 really blocks MRG-1 for issue-assigned PRs rather than only for Automations.
+
+### 2026-10-18 — Claude Code, after owner feedback
+
+Body changed: added 5.5 (credentials) and 5.6 (publishing), recorded the
+owner's "work first" stance in section 7, marked D3 accepted, reframed Q4 as a
+practical blocker, and changed the CAP-6/SEC-3 and SEC-1 rows. The CAP-6/SEC-3
+reclassification from DEV to "SUB, mostly" is my judgement; a sceptical
+reviewer should check whether "visible while being inspected" really keeps the
+rule's first purpose.
