@@ -77,6 +77,8 @@ The reviewer compares the diff against the task's acceptance criteria. It does *
 | `PLANNING FAILURE` | The task couldn't be built as written, or the PR doesn't close exactly one issue | Back to plan. **Never** to fix |
 | `DESIGN AMBIGUITY` | Needs a decision nobody has made, or the fix cap was reached | The owner |
 
+**Implementer time comes from evidence** [OUT-3]: the review workflow times each Copilot session on the PR's branch from its Actions run, against the `copilot-setup-steps` job's `timeout-minutes` at the commit the session started from. The reviewer sees the times; a session at 90% or more of its limit is marked *near limit*, and a task that ran out of time is a planning failure, not a fix. The verdict comment's hidden `agent-session` record keeps the totals for a run log. Claude Code implementer sessions don't run in Actions, so they aren't timed.
+
 **A broken run is never silent** [GAT-4, INT-5]: if a step fails before the verdict or plan is published, a last step comments with the run log link and, on a PR, sets the `review` status to `error`.
 
 The verdict comment's format is fixed (see `docs/agents/reviewer.md`). A comment missing the end marker or any section is **truncated and not a verdict** [OUT-5], however confident its first line.

@@ -55,8 +55,18 @@ export function classifyOutcome({ ran, notRunReason = '', exitCode = 0, stdout =
 }
 
 /** A hidden marker recording what a session cost and how it ended (ai-devops-cicd OBS-6, OBS-10). */
-export function sessionMarker({ role, model, effort, outcome, costUsd, durationMs, turns, round }) {
+export function sessionMarker({ role, model, effort, outcome, costUsd, durationMs, turns, round, implementer }) {
   const record = { role, model, effort, outcome, costUsd: Math.round(costUsd * 10000) / 10000, durationMs, turns };
   if (round !== undefined) record.round = round;
+  // The implementer's time, for the run log: how long the work took, and
+  // whether any session ran close to its limit.
+  if (implementer) {
+    record.implementer = {
+      sessions: implementer.sessions.length,
+      totalMs: implementer.totalMs,
+      nearLimit: implementer.anyNearLimit,
+      limitMs: implementer.sessions.at(-1)?.limitMs ?? null,
+    };
+  }
   return `<!-- agent-session ${JSON.stringify(record)} -->`;
 }

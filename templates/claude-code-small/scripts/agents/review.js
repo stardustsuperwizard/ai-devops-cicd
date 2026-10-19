@@ -23,6 +23,8 @@ import {
   applyCap,
   reviewStatus,
   renderPrReview,
+  summarizeImplementerSessions,
+  copilotTimeoutMinutes,
   VERDICT_LABELS,
   VERDICT_MARKER,
 } from './review-lib.js';
@@ -51,6 +53,30 @@ async function linkedIssue(gh, number) {
   return data.repository.pullRequest.closingIssuesReferences.nodes.map((n) => n.number);
 }
 
+/**
+ * Copilot sessions on the PR's branch, timed from GitHub's run records. Each
+ * is judged against the limit in force when it ran: the setup-steps file at
+ * the commit the session started from, or main's if that isn't available.
+ * Best effort: this is evidence for the reviewer, not a gate.
+ */
+async function implementerSessions(gh, headRef) {
+  try {
+    const { workflow_runs: runs } = await gh.request('GET', `${gh.repoPath}/actions/runs?branch=${encodeURIComponent(headRef)}&per_page=100`);
+    const file = '.github/workflows/copilot-setup-steps.yml';
+    const limitAt = (sha) => {
+      try {
+        return copilotTimeoutMinutes(git('show', `${sha}:${file}`));
+      } catch {
+        return existsSync(file) ? copilotTimeoutMinutes(readFileSync(file, 'utf8')) : null;
+      }
+    };
+    return summarizeImplementerSessions(runs ?? [], (run) => limitAt(run.head_sha));
+  } catch (err) {
+    console.warn(`Could not read implementer sessions: ${err.message}`);
+    return { sessions: [], totalMs: 0, anyNearLimit: false, error: err.message };
+  }
+}
+
 async function prepare() {
   const number = Number(arg('pr'));
   const prDir = arg('pr-dir', '.review-pr');
@@ -60,7 +86,7 @@ async function prepare() {
 
   // Only the fields the reviewer is allowed to see (CTX-2). Notably not pr.body.
   const raw = await gh.request('GET', `${gh.repoPath}/pulls/${number}`);
-  const pr = { number, headSha: raw.head.sha, baseRef: raw.base.ref, sameRepo: raw.head.repo?.full_name === raw.base.repo.full_name, author: raw.user?.login ?? '' };
+  const pr = { number, headSha: raw.head.sha, baseRef: raw.base.ref, sameRepo: raw.head.repo?.full_name === raw.base.repo.full_name, author: raw.user?.login ?? '', headRef: raw.head.ref };
   const prior = (await gh.comments(number)).filter((c) => c.user?.type === 'Bot').map((c) => c.body ?? '');
   const priorFixes = countPriorFixes(prior);
   const context = { pr, priorFixes, task: null, skip: null };
@@ -93,10 +119,11 @@ async function prepare() {
     const diffStat = git('diff', '--stat', '--no-color', pr.mergeBase, pr.headSha);
     const runs = await gh.request('GET', `${gh.repoPath}/commits/${pr.headSha}/check-runs?per_page=100`);
     const checks = runs.check_runs.map((r) => ({ name: r.name, status: r.status, conclusion: r.conclusion }));
+    context.implementer = await implementerSessions(gh, pr.headRef);
     const roleDoc = readFileSync('docs/agents/reviewer.md', 'utf8');
     writeFileSync(
       join(out, 'prompt.md'),
-      buildReviewPrompt({ roleDoc, pr, task: context.task, diff, diffStat, checks, priorFixes, prFilesDir: prDir }),
+      buildReviewPrompt({ roleDoc, pr, task: context.task, diff, diffStat, checks, priorFixes, prFilesDir: prDir, implementer: context.implementer }),
     );
   }
   writeFileSync(join(out, 'context.json'), JSON.stringify(context, null, 2));
@@ -136,7 +163,7 @@ async function publish() {
     body = `The review did not run. ${context.skip.reason}`;
   } else {
     const session = classifyOutcome(readEvidence(sessionDir));
-    marker = sessionMarker({ role: 'review', model, effort, ...session, round: priorFixes + 1 });
+    marker = sessionMarker({ role: 'review', model, effort, ...session, round: priorFixes + 1, implementer: context.implementer });
     const extracted = extractReviewVerdict(session.result, session.outcome);
     if (extracted.ok) {
       const capped = applyCap(extracted.verdict, priorFixes);
