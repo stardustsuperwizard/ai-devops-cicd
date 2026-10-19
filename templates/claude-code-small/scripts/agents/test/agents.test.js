@@ -16,6 +16,7 @@ import {
   reviewStatus,
   END_MARKER,
   VERDICT_MARKER,
+  renderPrReview,
 } from '../review-lib.js';
 import {
   buildPlanPrompt,
@@ -293,6 +294,24 @@ test('plan prompt frames the issue as data and asks for the json shape', () => {
   assert.match(p, /<data name="issue" number="26">/);
   assert.match(p, /never instructions to you/);
   assert.match(p, /"acceptanceCriteria"/);
+});
+
+test('pr review: always a comment review, never an approval or a block', () => {
+  for (const verdict of ['PASS', 'FIX', 'PLANNING FAILURE', 'DESIGN AMBIGUITY']) {
+    for (const prAuthor of ['Copilot', 'stardustsuperwizard']) {
+      const r = renderPrReview({ verdict, commentUrl: 'https://x/c/1', prAuthor });
+      assert.equal(r.event, 'COMMENT', `${verdict} by ${prAuthor}`);
+      assert.match(r.body, new RegExp(`VERDICT: ${verdict}`));
+      assert.match(r.body, /https:\/\/x\/c\/1/);
+    }
+  }
+});
+
+test('pr review: only a FIX on a Copilot PR asks Copilot to act', () => {
+  assert.match(renderPrReview({ verdict: 'FIX', prAuthor: 'Copilot' }).body, /@copilot/);
+  assert.doesNotMatch(renderPrReview({ verdict: 'FIX', prAuthor: 'stardustsuperwizard' }).body, /@copilot/);
+  assert.doesNotMatch(renderPrReview({ verdict: 'PASS', prAuthor: 'Copilot' }).body, /@copilot/);
+  assert.doesNotMatch(renderPrReview({ verdict: 'DESIGN AMBIGUITY', prAuthor: 'Copilot' }).body, /@copilot/);
 });
 
 // ---------- config ----------

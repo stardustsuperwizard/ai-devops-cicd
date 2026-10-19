@@ -31,7 +31,7 @@ If no task issue is linked, or it has no acceptance criteria, the verdict is `PL
 ## Output
 Your final message is **one** comment in exactly this shape.
 
-- **In the review workflow** (`run:review` label), that's all you do: the workflow posts it, sets the matching `review:*` label, adds the human-check label (`needs-human-check` by default) for any owner-to-check criterion, and sets the `review` status.
+- **In the review workflow** (`run:review` label), that's all you do: the workflow posts it, sets the matching `review:*` label, adds the human-check label (`needs-human-check` by default) for any owner-to-check criterion, sets the `review` status, and mirrors the verdict as a comment-type PR review.
 - **In an interactive session** (`/review`), post it yourself, set the matching `review:*` label and clear the others, and add `needs-human-check` if any criterion is owner-to-check.
 
 ```

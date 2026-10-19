@@ -22,6 +22,7 @@ import {
   countPriorFixes,
   applyCap,
   reviewStatus,
+  renderPrReview,
   VERDICT_LABELS,
   VERDICT_MARKER,
 } from './review-lib.js';
@@ -59,7 +60,7 @@ async function prepare() {
 
   // Only the fields the reviewer is allowed to see (CTX-2). Notably not pr.body.
   const raw = await gh.request('GET', `${gh.repoPath}/pulls/${number}`);
-  const pr = { number, headSha: raw.head.sha, baseRef: raw.base.ref, sameRepo: raw.head.repo?.full_name === raw.base.repo.full_name };
+  const pr = { number, headSha: raw.head.sha, baseRef: raw.base.ref, sameRepo: raw.head.repo?.full_name === raw.base.repo.full_name, author: raw.user?.login ?? '' };
   const prior = (await gh.comments(number)).filter((c) => c.user?.type === 'Bot').map((c) => c.body ?? '');
   const priorFixes = countPriorFixes(prior);
   const context = { pr, priorFixes, task: null, skip: null };
@@ -150,8 +151,15 @@ async function publish() {
     }
   }
 
-  await gh.comment(pr.number, `${body}\n\n<!-- ${VERDICT_MARKER} ${verdict ?? 'none'} -->${marker ? `\n${marker}` : ''}`);
+  const posted = await gh.comment(pr.number, `${body}\n\n<!-- ${VERDICT_MARKER} ${verdict ?? 'none'} -->${marker ? `\n${marker}` : ''}`);
   if (verdict) {
+    // Best effort: the comment, label and status are the verdict; this only mirrors it.
+    try {
+      const review = renderPrReview({ verdict, commentUrl: posted?.html_url, prAuthor: pr.author });
+      await gh.request('POST', `${gh.repoPath}/pulls/${pr.number}/reviews`, { commit_id: pr.headSha, ...review });
+    } catch (err) {
+      console.warn(`Could not post the PR review: ${err.message}`);
+    }
     // Exactly one verdict label: clear the others, then add (DSP-5, DSP-9).
     for (const [v, label] of Object.entries(VERDICT_LABELS)) if (v !== verdict) await gh.removeLabel(pr.number, label);
     await gh.addLabels(pr.number, [VERDICT_LABELS[verdict]]);

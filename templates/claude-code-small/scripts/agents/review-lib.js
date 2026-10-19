@@ -110,3 +110,22 @@ export function reviewStatus(verdict) {
   if (verdict === 'PASS') return { state: 'success', description: 'PASS: every acceptance criterion met' };
   return { state: 'failure', description: `${verdict}: see the review comment` };
 }
+
+/**
+ * The PR review that mirrors a verdict in the Reviews panel, so it sits where
+ * people (and Copilot) look for reviews. Always a COMMENT review: a bot
+ * approval would be a machine verdict counting as approval (ai-devops-cicd
+ * MRG-1, MRG-3), and a bot "request changes" would block merging until someone
+ * dismissed it. The verdict comment stays the record: the cap counts its markers.
+ *
+ * On a Copilot PR, a FIX also asks Copilot to act. Whether Copilot answers a
+ * review from a bot is untested; if it doesn't, comment `@copilot` yourself.
+ */
+export function renderPrReview({ verdict, commentUrl, prAuthor }) {
+  const where = commentUrl ? `[the verdict comment](${commentUrl})` : 'the verdict comment on this PR';
+  const lines = [`**VERDICT: ${verdict}.** The full review, with evidence, is in ${where}.`];
+  if (verdict === 'FIX' && /^copilot$/i.test(prAuthor ?? '')) {
+    lines.push('', '@copilot address the latest review verdict: fix each item under *Required before merge* in that comment, and nothing else.');
+  }
+  return { event: 'COMMENT', body: lines.join('\n') };
+}
