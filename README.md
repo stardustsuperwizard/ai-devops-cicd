@@ -88,7 +88,8 @@ docs/adaptation/       Methodology for moving it to different tools: the
                        seams, the procedure, prompts for an agent companion,
                        and the tests that prove a port is right.
 docs/rationale/        Field notes — why each rule exists, and what broke first.
-examples/              The production system it was distilled from.
+examples/              The production system it was distilled from, and a
+                       small-profile adopter (jrpg-battle).
 ```
 
 ### The guide
