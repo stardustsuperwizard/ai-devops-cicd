@@ -23,7 +23,7 @@ The scripts are Node with no dependencies, so the repository itself can be in an
 | `.github/copilot-instructions.md`, `CLAUDE.md` | One-line pointers to `AGENTS.md` | No |
 | `.claude/settings.json`, `.claude/commands/` | Denies merge/approve/auto-merge; `/plan`, `/implement`, `/review`, `/fix` | No |
 | `scripts/agents/` | Prompt building, outcome classification, verdict and plan validation, GitHub calls | No |
-| `scripts/agents/test/` | 32 tests of the above: `cd scripts/agents && npm test` | No |
+| `scripts/agents/test/` | 33 tests of the above: `cd scripts/agents && npm test` | No |
 | `docs/agents/*.md` | The four roles | Lightly |
 | `docs/AGENT_WORKFLOW.md` | The process, labels and deviations | **Yes**: deviations |
 | `AGENTS.md` | Canonical instructions | **Yes**: fill every `ADAPT` |
@@ -65,6 +65,8 @@ Then try it on something small: put `run:plan` on an idea issue, read the plan, 
 | Corrections capped [HUM-3] | The fourth `FIX` becomes `DESIGN AMBIGUITY`, counted from the workflow's own markers. |
 | Plans validated whole [HND-4] | Filled fields, checkable criteria, dependencies that resolve, no cycles, at most eight tasks. Approval creates issues from the bot's marker, never from editable text. |
 | A bot never approves [MRG-1, MRG-3] | The verdict is mirrored as a PR review of type `COMMENT` only; a test fails if any verdict maps to `APPROVE`. |
+| A broken run is never silent [GAT-4, INT-5] | Each job ends with `fail.js` on `failure()`: a comment with the run link, and a `review` status of `error`. Steps that already explained an intentional failure don't get a second comment. |
+| Least privilege, but complete | Each job declares only the scopes its scripts call. Declared permissions *replace* the defaults, so a missing scope is a 403 at run time; a test pins the review job's list. The first live run found `checks: read` missing. |
 | Cost recorded [OBS-10] | Every comment carries a hidden `agent-session` record. |
 
 **Not included,** and why: the test ratchet and red gate [GAT-1, GAT-2], a run ledger [OBS-6], model fallback [SES-5], and implement/fix in Actions. Each is worth adding when its absence costs something; the [conformance levels](../../docs/architecture/04-conformance.md) say which matter first.

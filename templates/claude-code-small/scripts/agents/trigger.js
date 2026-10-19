@@ -6,6 +6,7 @@
 //   node scripts/agents/trigger.js --label run:review --issue 42 --sender octocat
 
 import { github } from './github.js';
+import { markReported } from './fail.js';
 
 const ALLOWED = new Set(['admin', 'maintain', 'write']);
 
@@ -29,6 +30,7 @@ if (!ALLOWED.has(permission)) {
   // Starting a session spends the owner's budget, so it takes write access (HUM-1).
   await gh.comment(number, `\`${label}\` was ignored: @${sender} has \`${permission}\` access, and starting an agent session needs write access.`);
   console.error(`${sender} has ${permission} access; refusing to start a session.`);
+  markReported();
   process.exit(1);
 }
 console.log(`Consumed ${label} on #${number}; ${sender} has ${permission} access.`);
