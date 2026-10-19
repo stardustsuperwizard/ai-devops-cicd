@@ -1,7 +1,7 @@
 // Tests for the agent workflows' own logic (scripts/agents/). These are the
 // parts that fail silently, so each test is named after the failure it stops.
 import { test } from 'node:test';
-import { mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { loadConfig, DEFAULT_CONFIG } from '../config.js';
@@ -17,6 +17,8 @@ import {
   END_MARKER,
   VERDICT_MARKER,
   renderPrReview,
+  summarizeImplementerSessions,
+  copilotTimeoutMinutes,
 } from '../review-lib.js';
 import {
   buildPlanPrompt,
@@ -373,7 +375,58 @@ test('review job can read CI results: declared permissions replace the defaults'
   const { readFileSync } = await import('node:fs');
   const yml = readFileSync(new URL('../../../.github/workflows/agent-review.yml', import.meta.url), 'utf8');
   const block = yml.match(/\n    permissions:\n((?: {6}[a-z-]+: (?:read|write)\n)+)/)?.[1] ?? '';
-  for (const scope of ['checks: read', 'contents: read', 'issues: write', 'pull-requests: write', 'statuses: write']) {
+  for (const scope of ['actions: read', 'checks: read', 'contents: read', 'issues: write', 'pull-requests: write', 'statuses: write']) {
     assert.ok(block.includes(scope), `agent-review.yml job permissions lack "${scope}"`);
   }
+});
+
+// ---------- implementer sessions ----------
+
+const copilotRun = (start, end, over = {}) => ({
+  name: 'Running Copilot cloud agent', status: 'completed', conclusion: 'success',
+  run_started_at: start, updated_at: end, head_sha: 'abc', ...over,
+});
+
+test('implementer sessions: timed from run records, and near-limit is flagged', () => {
+  const runs = [
+    copilotRun('2026-10-19T17:16:03Z', '2026-10-19T17:25:44Z'), // the #58 build: 9m41s of 10m
+    copilotRun('2026-10-19T18:00:00Z', '2026-10-19T18:05:00Z'),
+    { ...copilotRun('2026-10-19T19:00:00Z', '2026-10-19T19:01:00Z'), name: 'CI' },
+    { ...copilotRun('2026-10-19T20:00:00Z', '2026-10-19T20:01:00Z'), status: 'in_progress' },
+  ];
+  const s = summarizeImplementerSessions(runs, () => 10);
+  assert.equal(s.sessions.length, 2, 'only completed Copilot runs count');
+  assert.equal(s.sessions[0].durationMs, 581_000);
+  assert.equal(s.sessions[0].nearLimit, true);
+  assert.equal(s.sessions[1].nearLimit, false);
+  assert.equal(s.totalMs, 881_000);
+  assert.equal(s.anyNearLimit, true);
+  assert.equal(summarizeImplementerSessions(runs, () => 30).anyNearLimit, false, 'judged against the limit in force');
+  assert.equal(summarizeImplementerSessions(runs).sessions[0].nearLimit, null, 'unknown limit is not a verdict');
+});
+
+test('implementer sessions: the limit is the copilot-setup-steps job timeout', () => {
+  const yml = 'name: x\njobs:\n  copilot-setup-steps:\n    runs-on: ubuntu-latest\n    # timeout-minutes: 99 in a comment\n    timeout-minutes: 30\n    steps:\n      - run: true\n';
+  assert.equal(copilotTimeoutMinutes(yml), 30);
+  assert.equal(copilotTimeoutMinutes('jobs:\n  copilot-setup-steps:\n    runs-on: x\n  other:\n    timeout-minutes: 5\n'), null, "another job's timeout doesn't count");
+  assert.equal(copilotTimeoutMinutes(''), null);
+  const real = readFileSync(new URL('../../../.github/workflows/copilot-setup-steps.yml', import.meta.url), 'utf8');
+  assert.equal(typeof copilotTimeoutMinutes(real), 'number', 'the real file parses');
+});
+
+test('implementer sessions reach the reviewer as data, and the run log as a marker', () => {
+  const implementer = summarizeImplementerSessions([copilotRun('2026-10-19T17:16:03Z', '2026-10-19T17:25:44Z')], () => 10);
+  const p = buildReviewPrompt({
+    roleDoc: '', pr: { number: 1, headSha: 'a', mergeBase: 'b' }, task: { number: 2, title: 't', body: 'b', ownerComments: [] },
+    diff: '', diffStat: '', checks: [], priorFixes: 0, prFilesDir: 'x', implementer,
+  });
+  assert.match(p, /<data name="implementer_sessions">\n- session 1: 9m41s of a 10m limit \(NEAR LIMIT\), ended success/);
+  assert.match(p, /PLANNING FAILURE, not FIX/);
+  const none = buildReviewPrompt({
+    roleDoc: '', pr: { number: 1, headSha: 'a', mergeBase: 'b' }, task: { number: 2, title: 't', body: 'b', ownerComments: [] },
+    diff: '', diffStat: '', checks: [], priorFixes: 0, prFilesDir: 'x',
+  });
+  assert.match(none, /no Copilot sessions recorded/);
+  const marker = sessionMarker({ role: 'review', outcome: 'completed', costUsd: 0, durationMs: 0, turns: 0, implementer });
+  assert.deepEqual(JSON.parse(marker.match(/agent-session (.*) -->/)[1]).implementer, { sessions: 1, totalMs: 581_000, nearLimit: true, limitMs: 600_000 });
 });

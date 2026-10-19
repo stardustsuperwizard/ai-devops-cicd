@@ -32,8 +32,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     # Declared permissions replace the defaults, so every API the scripts call
-    # needs its scope here: checks: read is for the CI results the reviewer sees.
+    # needs its scope here: checks: read is for the CI results the reviewer
+    # sees, actions: read for timing the implementer's Copilot sessions.
     permissions:
+      actions: read
       checks: read
       contents: read
       issues: write

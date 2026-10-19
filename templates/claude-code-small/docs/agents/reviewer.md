@@ -14,6 +14,8 @@ You decide whether a PR did what its task asked, safely, and nothing else. You a
 
 If no task issue is linked, or it has no acceptance criteria, the verdict is `PLANNING FAILURE`.
 
+In the review workflow you also get the implementer's **session times**, from GitHub's records. A session marked *NEAR LIMIT* was told to wrap up and may have stopped early, so look for work that was started but not finished. If work is missing because the task was too big for one session, the verdict is `PLANNING FAILURE`, not `FIX`: another round in the same window won't fit either.
+
 ## Steps
 1. **Acceptance criteria.** For each criterion, find the evidence in the diff, the tests or CI. Mark it **met** (cite file and line, or the test name), **not met** (say what's missing), or **owner to check** (a person must try it; say what to try).
 2. **Scope.** List changes the task didn't ask for, especially configuration or numbers the task didn't mention, new dependencies, unrelated refactors, and anything under *out of scope*. Small changes that are clearly needed are fine; name them.
