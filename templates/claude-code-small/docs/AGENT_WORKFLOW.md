@@ -87,6 +87,19 @@ Each verdict is also posted as a **comment-type PR review**, so it shows in the 
 
 A person merges, after: CI green, latest verdict `PASS`, and a human check if labeled `needs-human-check`. Squash: one task, one commit [MRG-4].
 
+**Driving a Copilot PR, in order:**
+
+1. **Approve and run workflows** (banner on the PR). GitHub holds CI on Copilot's pushes until someone with write access lets it run. This approves *running CI*, not the code. Repeat after every Copilot push.
+2. When `ci` is green, add **`run:review`**. Drafts are fine. Then act on the verdict:
+   - `FIX`: Copilot should pick up the review; if it doesn't, comment `@copilot address the latest review verdict`. When it pushes, go back to step 1.
+   - `PLANNING FAILURE` or `DESIGN AMBIGUITY`: stop. The task needs you, not more code.
+   - `PASS`: carry on. If it added `needs-human-check`, try what the verdict's *owner to check* lines name.
+3. **Ready for review** (bottom of the PR). Drafts can't merge. Leaving it until now means "not a draft" always means "passed review and the human check".
+4. **Approve** (Files changed → Review changes → Approve). This answers Copilot's review request and is the human sign-off; the bot never approves [MRG-1].
+5. **Squash and merge.**
+
+For a Claude Code PR, skip steps 1, 3 and 4: CI runs without approval, it isn't a draft, and you can't approve your own PR.
+
 ## Tickets or a focused session?
 
 Tickets win once a feature area's **seams are frozen**: the remaining work is additive against a stable contract. Before that, a cold task can't design the contract, and tickets stall. Changing a core contract is one focused session, planned first, one PR, docs updated. The status issue tracks which areas are ready.
