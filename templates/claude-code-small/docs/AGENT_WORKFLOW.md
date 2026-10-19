@@ -45,7 +45,7 @@ Every stage starts with a **human act** [HUM-1]: a label, an assignment, or a sl
 |---|---|---|---|---|
 | **Plan** | `run:plan` label on the issue, then `run:plan-approve` | GitHub Actions, **read-only** session | The issue body and the owner's comments; the code | A validated plan comment; on approval, task issues |
 | **Implement** | `/implement <issue>`, or assign the issue to Copilot | Claude Code session, or Copilot's coding agent | **One** task issue [CTX-4] | A branch and a PR that `Closes #N` |
-| **Review** | `run:review` label on the PR | GitHub Actions, **read-only** session | Task issue, diff, CI results. **Not** the PR body [CTX-3] | Verdict comment, one `review:*` label, the `review` status |
+| **Review** | `run:review` label on the PR | GitHub Actions, **read-only** session | Task issue, diff, CI results. **Not** the PR body [CTX-3] | Verdict comment, one `review:*` label, the `review` status, a comment-type PR review |
 | **Fix** | `/fix <PR>`, or `@copilot` on a Copilot PR | Claude Code session, or Copilot | The latest verdict only [CTX-5]; the diff | Commits on the same branch |
 
 **Models: record, don't route.** Use the default model for building and the strongest available for planning and review. Every Actions comment carries a hidden `agent-session` record (model, outcome, cost, turns). Don't build per-task model routing until those records show a class of task that keeps failing at the default.
@@ -78,6 +78,8 @@ The reviewer compares the diff against the task's acceptance criteria. It does *
 | `DESIGN AMBIGUITY` | Needs a decision nobody has made, or the fix cap was reached | The owner |
 
 The verdict comment's format is fixed (see `docs/agents/reviewer.md`). A comment missing the end marker or any section is **truncated and not a verdict** [OUT-5], however confident its first line.
+
+Each verdict is also posted as a **comment-type PR review**, so it shows in the Reviews panel. It never *approves* (a machine verdict must not count as approval [MRG-1, MRG-3]) and never *requests changes* (a bot's block would need dismissing). On a Copilot PR, a `FIX` review also asks `@copilot` to act; whether Copilot answers a bot's review is untested. Copilot's own review request is answered by a person: approve after a `PASS`.
 
 ### Merge
 

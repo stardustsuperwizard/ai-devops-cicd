@@ -10,7 +10,7 @@ The scripts are Node with no dependencies, so the repository itself can be in an
 
 | Path | What | Change it? |
 |---|---|---|
-| `.github/workflows/agent-review.yml` | `run:review` on a PR → read-only review → verdict comment, one `review:*` label, the `review` commit status | No |
+| `.github/workflows/agent-review.yml` | `run:review` on a PR → read-only review → verdict comment, one `review:*` label, the `review` commit status, and a comment-type PR review | No |
 | `.github/workflows/agent-plan.yml` | `run:plan` on an issue → validated plan for approval; `run:plan-approve` → task issues | No |
 | `.github/workflows/agent-selftest.yml` | Run by hand: proves the credential works and a read-only session can't write | No |
 | `.github/workflows/bootstrap-labels.yml` | Run by hand: creates every label in `labels.json` | No |
@@ -23,7 +23,7 @@ The scripts are Node with no dependencies, so the repository itself can be in an
 | `.github/copilot-instructions.md`, `CLAUDE.md` | One-line pointers to `AGENTS.md` | No |
 | `.claude/settings.json`, `.claude/commands/` | Denies merge/approve/auto-merge; `/plan`, `/implement`, `/review`, `/fix` | No |
 | `scripts/agents/` | Prompt building, outcome classification, verdict and plan validation, GitHub calls | No |
-| `scripts/agents/test/` | 30 tests of the above: `cd scripts/agents && npm test` | No |
+| `scripts/agents/test/` | 32 tests of the above: `cd scripts/agents && npm test` | No |
 | `docs/agents/*.md` | The four roles | Lightly |
 | `docs/AGENT_WORKFLOW.md` | The process, labels and deviations | **Yes**: deviations |
 | `AGENTS.md` | Canonical instructions | **Yes**: fill every `ADAPT` |
@@ -64,6 +64,7 @@ Then try it on something small: put `run:plan` on an idea issue, read the plan, 
 | No contract, no review [GAT-9] | A PR that doesn't close exactly one issue gets `PLANNING FAILURE` without a session. |
 | Corrections capped [HUM-3] | The fourth `FIX` becomes `DESIGN AMBIGUITY`, counted from the workflow's own markers. |
 | Plans validated whole [HND-4] | Filled fields, checkable criteria, dependencies that resolve, no cycles, at most eight tasks. Approval creates issues from the bot's marker, never from editable text. |
+| A bot never approves [MRG-1, MRG-3] | The verdict is mirrored as a PR review of type `COMMENT` only; a test fails if any verdict maps to `APPROVE`. |
 | Cost recorded [OBS-10] | Every comment carries a hidden `agent-session` record. |
 
 **Not included,** and why: the test ratchet and red gate [GAT-1, GAT-2], a run ledger [OBS-6], model fallback [SES-5], and implement/fix in Actions. Each is worth adding when its absence costs something; the [conformance levels](../../docs/architecture/04-conformance.md) say which matter first.
