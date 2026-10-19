@@ -20,7 +20,10 @@ permissions:
 jobs:
   copilot-setup-steps:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    # Copilot's whole session runs inside this job, so this is the session's
+    # time limit, not just the setup's. The first adopter set 10 minutes and
+    # Copilot was cut off at 9m41s. GitHub allows up to 59.
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v5
       # ADAPT: your toolchain and dependency install, as in CI. For example:

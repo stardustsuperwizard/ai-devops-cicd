@@ -38,7 +38,7 @@ The scripts are Node with no dependencies, so the repository itself can be in an
 6. **Run Actions → Bootstrap labels**, then **Actions → Agent self-test**. Both must go green before the first real run.
 7. **Merge protection**, if the plan allows it: require your CI check and the **`review` commit status**. Never require a check named after a workflow job: a label-gated job reports *skipped* on every other label event, and skipped satisfies a required check of the same name (see the example's finding 1).
 8. **Optional variables:** `AGENT_REVIEW_MODEL`, `AGENT_PLAN_MODEL`, `AGENT_*_EFFORT` (default `high`), `AGENT_REVIEW_BUDGET_USD` (5), `AGENT_PLAN_BUDGET_USD` (10).
-9. **Copilot**, if you have it: adapt `copilot-setup-steps.yml`, and check that Copilot's coding agent is enabled for the repository.
+9. **Copilot**, if you have it: adapt `copilot-setup-steps.yml`. Its `timeout-minutes` is Copilot's **whole session** limit, not just the setup's, so don't set it low (the template uses 30; GitHub allows up to 59). Then and check that Copilot's coding agent is enabled for the repository.
 
 Then try it on something small: put `run:plan` on an idea issue, read the plan, and add `run:plan-approve`.
 
