@@ -71,6 +71,13 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
         run: node scripts/agents/plan.js publish --issue "$ISSUE" --session-dir "$RUNNER_TEMP/plan/session" --model "$MODEL" --effort "$EFFORT"
 
+      - name: Report a failure on the issue
+        if: failure()
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: node scripts/agents/fail.js --issue "$ISSUE" --retry run:plan --run-url "$RUN_URL"
+
   approve:
     if: github.event.label.name == 'run:plan-approve' && !github.event.issue.pull_request
     concurrency:
@@ -102,3 +109,10 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: node scripts/agents/plan.js approve --issue "$ISSUE"
+
+      - name: Report a failure on the issue
+        if: failure()
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: node scripts/agents/fail.js --issue "$ISSUE" --retry run:plan-approve --run-url "$RUN_URL"

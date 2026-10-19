@@ -349,3 +349,14 @@ test('github: GraphQL goes to its own URL, so Enterprise Server works', async ()
   }
   assert.deepEqual(seen, ['https://ghe.example/api/graphql', 'https://ghe.example/api/v3/repos/o/r']);
 });
+
+test('review job can read CI results: declared permissions replace the defaults', async () => {
+  // A live run failed with 403 on check-runs because checks: read was missing;
+  // a fake API doesn't enforce scopes, so pin the list here.
+  const { readFileSync } = await import('node:fs');
+  const yml = readFileSync(new URL('../../../.github/workflows/agent-review.yml', import.meta.url), 'utf8');
+  const block = yml.match(/\n    permissions:\n((?: {6}[a-z-]+: (?:read|write)\n)+)/)?.[1] ?? '';
+  for (const scope of ['checks: read', 'contents: read', 'issues: write', 'pull-requests: write', 'statuses: write']) {
+    assert.ok(block.includes(scope), `agent-review.yml job permissions lack "${scope}"`);
+  }
+});

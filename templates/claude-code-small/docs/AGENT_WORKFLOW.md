@@ -77,6 +77,8 @@ The reviewer compares the diff against the task's acceptance criteria. It does *
 | `PLANNING FAILURE` | The task couldn't be built as written, or the PR doesn't close exactly one issue | Back to plan. **Never** to fix |
 | `DESIGN AMBIGUITY` | Needs a decision nobody has made, or the fix cap was reached | The owner |
 
+**A broken run is never silent** [GAT-4, INT-5]: if a step fails before the verdict or plan is published, a last step comments with the run log link and, on a PR, sets the `review` status to `error`.
+
 The verdict comment's format is fixed (see `docs/agents/reviewer.md`). A comment missing the end marker or any section is **truncated and not a verdict** [OUT-5], however confident its first line.
 
 Each verdict is also posted as a **comment-type PR review**, so it shows in the Reviews panel. It never *approves* (a machine verdict must not count as approval [MRG-1, MRG-3]) and never *requests changes* (a bot's block would need dismissing). On a Copilot PR, a `FIX` review also asks `@copilot` to act; whether Copilot answers a bot's review is untested. Copilot's own review request is answered by a person: approve after a `PASS`.

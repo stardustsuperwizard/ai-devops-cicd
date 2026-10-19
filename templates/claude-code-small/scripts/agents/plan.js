@@ -14,6 +14,7 @@ import { join } from 'node:path';
 import { github, ownerComments } from './github.js';
 import { classifyOutcome, sessionMarker } from './outcome.js';
 import { loadConfig } from './config.js';
+import { markReported } from './fail.js';
 import {
   buildPlanPrompt,
   extractPlan,
@@ -106,6 +107,7 @@ async function publish() {
   if (!extracted.ok) {
     const why = session.outcome === 'completed' ? '' : ` ${session.reason}`;
     await gh.comment(number, `**The planner did not produce a usable plan, so nothing was created.** ${extracted.errors.join(' ')}${why}\n\nAdd \`run:plan\` again to retry.\n\n${marker}`);
+    markReported();
     process.exitCode = 1;
     return;
   }
@@ -114,6 +116,7 @@ async function publish() {
   if (!result.ok) {
     const list = result.errors.map((e) => `- ${e}`).join('\n');
     await gh.comment(number, `**The plan failed validation, so nothing was created.**\n\n${list}\n\nComment with guidance if needed, then add \`run:plan\` again.\n\n${marker}`);
+    markReported();
     process.exitCode = 1;
     return;
   }
@@ -142,12 +145,14 @@ async function approve() {
   const plan = latest ? decodePlanMarker(latest.body) : null;
   if (!plan) {
     await gh.comment(number, `There's no proposed plan on this issue to approve. Add \`run:plan\` first.`);
+    markReported();
     process.exitCode = 1;
     return;
   }
   const result = await validateWithLookups(gh, plan);
   if (!result.ok || result.blocked) {
     await gh.comment(number, `The proposed plan no longer validates, so nothing was created:\n\n${result.errors.map((e) => `- ${e}`).join('\n')}`);
+    markReported();
     process.exitCode = 1;
     return;
   }
