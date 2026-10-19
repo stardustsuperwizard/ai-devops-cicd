@@ -1,0 +1,96 @@
+# Review stage: add the `run:review` label to a pull request.
+#
+# A read-only Claude Code session compares the PR's diff against its task
+# issue's acceptance criteria and returns one of four verdicts. This workflow
+# then posts the verdict, sets exactly one review:* label, and sets the
+# `review` commit status. See docs/AGENT_WORKFLOW.md → Review.
+#
+# Runs on pull_request_target so the workflow, scripts and agent
+# instructions come from main, never from the PR under review: an
+# implementer's PR can't edit its own reviewer. The PR's files are checked
+# out only as material to read; nothing from the PR is executed.
+name: Agent review
+
+on:
+  pull_request_target:
+    types: [labeled]
+
+permissions: {}
+
+jobs:
+  # Never name this job `review`. Every label event on a PR creates a check run
+  # named after the job, *skipped* unless the label is run:review, and a
+  # skipped check satisfies a required check of the same name. The verdict is
+  # the `review` commit status; this job's check must never be mistaken for it
+  # (ai-devops-cicd INT-2: a skipped job counts as reported).
+  agent-review-session:
+    name: agent review session
+    if: github.event.label.name == 'run:review'
+    concurrency:
+      group: agent-review-${{ github.event.pull_request.number }}
+      cancel-in-progress: false
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: write
+      statuses: write
+    env:
+      PR: ${{ github.event.pull_request.number }}
+      MODEL: ${{ vars.AGENT_REVIEW_MODEL || 'claude-opus-5-5' }}
+      EFFORT: ${{ vars.AGENT_REVIEW_EFFORT || 'high' }}
+      BUDGET: ${{ vars.AGENT_REVIEW_BUDGET_USD || '5' }}
+    steps:
+      - name: Check out main (trusted code and instructions)
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+
+      - name: Consume the trigger label and check who set it
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          SENDER: ${{ github.event.sender.login }}
+        run: node scripts/agents/trigger.js --label run:review --issue "$PR" --sender "$SENDER"
+
+      - name: Fetch the PR's files for reading
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          SERVER_URL: ${{ github.server_url }}
+        run: |
+          auth="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$GITHUB_TOKEN" | base64 -w0)"
+          git -c "http.$SERVER_URL/.extraheader=$auth" fetch --no-tags --quiet origin "+refs/pull/$PR/head:refs/remotes/pr/head"
+          git worktree add --detach --quiet .review-pr refs/remotes/pr/head
+          echo ".review-pr/" >> .git/info/exclude
+
+      - name: Assemble the reviewer's inputs
+        id: prepare
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node scripts/agents/review.js prepare --pr "$PR" --pr-dir .review-pr --out "$RUNNER_TEMP/review"
+
+      - name: Review (read-only session)
+        if: steps.prepare.outputs.run == 'true'
+        uses: ./.github/actions/run-claude
+        env:
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        with:
+          prompt-file: ${{ runner.temp }}/review/prompt.md
+          session-dir: ${{ runner.temp }}/review/session
+          model: ${{ env.MODEL }}
+          effort: ${{ env.EFFORT }}
+          tools: Read,Grep,Glob
+          max-budget-usd: ${{ env.BUDGET }}
+          check-dirs: . .review-pr
+
+      - name: Publish the verdict
+        if: always() && steps.prepare.outcome == 'success'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node scripts/agents/review.js publish --out "$RUNNER_TEMP/review" --session-dir "$RUNNER_TEMP/review/session" --model "$MODEL" --effort "$EFFORT"

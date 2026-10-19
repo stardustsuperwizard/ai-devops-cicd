@@ -1,0 +1,1 @@
+Read `AGENTS.md` at the repository root and follow it. It is the canonical instructions file for every agent, including Copilot. If you were assigned an issue, you are the implementer: also follow `docs/agents/implementer.md`.

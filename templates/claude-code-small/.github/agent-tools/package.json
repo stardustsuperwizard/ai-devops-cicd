@@ -1,0 +1,8 @@
+{
+  "name": "agent-tools",
+  "private": true,
+  "description": "CI-only tools for the agent workflows (.github/workflows/agent-*.yml). Not a dependency of the project itself: nothing here ships. Pinned exactly; the lockfile carries the integrity hashes npm ci verifies.",
+  "dependencies": {
+    "@anthropic-ai/claude-code": "2.1.290"
+  }
+}

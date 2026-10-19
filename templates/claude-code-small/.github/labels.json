@@ -1,0 +1,92 @@
+[
+  {
+    "name": "idea",
+    "color": "BFD4F2",
+    "description": "Worth exploring; not decided"
+  },
+  {
+    "name": "agent-ready",
+    "color": "0E8A16",
+    "description": "Task passed the definition of ready; an implementer may start"
+  },
+  {
+    "name": "run:review",
+    "color": "1D76DB",
+    "description": "Trigger: run the review workflow on this PR (consumed when it starts)"
+  },
+  {
+    "name": "run:plan",
+    "color": "1D76DB",
+    "description": "Trigger: run the planner workflow on this issue (consumed when it starts)"
+  },
+  {
+    "name": "run:plan-approve",
+    "color": "1D76DB",
+    "description": "Trigger: create the task issues from the proposed plan (consumed when it starts)"
+  },
+  {
+    "name": "plan:proposed",
+    "color": "C2E0C6",
+    "description": "A plan is posted on this issue, waiting for approval"
+  },
+  {
+    "name": "plan:needs-decision",
+    "color": "FBCA04",
+    "description": "The planner needs a decision from the owner before it can split this"
+  },
+  {
+    "name": "planned",
+    "color": "0E8A16",
+    "description": "Task issues have been created from this issue"
+  },
+  {
+    "name": "review:pass",
+    "color": "0E8A16",
+    "description": "Review verdict: every acceptance criterion met"
+  },
+  {
+    "name": "review:fix",
+    "color": "D93F0B",
+    "description": "Review verdict: the work is wrong, the task was right"
+  },
+  {
+    "name": "review:planning-failure",
+    "color": "B60205",
+    "description": "Review verdict: the task couldn't be built as written"
+  },
+  {
+    "name": "review:design-ambiguity",
+    "color": "FBCA04",
+    "description": "Review verdict: needs a decision from the owner"
+  },
+  {
+    "name": "needs-human-check",
+    "color": "5319E7",
+    "description": "A person should try this before merging; no check can prove it"
+  },
+  {
+    "name": "status",
+    "color": "1D76DB",
+    "description": "The pinned Project status issue"
+  },
+  {
+    "name": "backend",
+    "color": "C5DEF5",
+    "description": "Server, services and data"
+  },
+  {
+    "name": "frontend",
+    "color": "C5DEF5",
+    "description": "Screens and client code"
+  },
+  {
+    "name": "infra",
+    "color": "C5DEF5",
+    "description": "CI, deployment and developer tooling"
+  },
+  {
+    "name": "docs",
+    "color": "C5DEF5",
+    "description": "Documentation only"
+  }
+]

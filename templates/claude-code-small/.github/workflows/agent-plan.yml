@@ -1,0 +1,104 @@
+# Planner stage, in two label-triggered steps on an idea or decision issue:
+#
+#   run:plan          A read-only Claude Code session proposes a breakdown into
+#                     task issues. The plan is validated, then posted on the
+#                     issue for approval (label plan:proposed). Nothing is
+#                     created yet.
+#   run:plan-approve  Creates the proposed task issues, labeled agent-ready and
+#                     linked as sub-issues. No model runs.
+#
+# See docs/AGENT_WORKFLOW.md → Plan. Issue events always run the workflow
+# from main.
+name: Agent plan
+
+on:
+  issues:
+    types: [labeled]
+
+permissions: {}
+
+jobs:
+  plan:
+    if: github.event.label.name == 'run:plan' && !github.event.issue.pull_request
+    concurrency:
+      group: agent-plan-${{ github.event.issue.number }}
+      cancel-in-progress: false
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      issues: write
+    env:
+      ISSUE: ${{ github.event.issue.number }}
+      MODEL: ${{ vars.AGENT_PLAN_MODEL || 'claude-fable-5-1' }}
+      EFFORT: ${{ vars.AGENT_PLAN_EFFORT || 'high' }}
+      BUDGET: ${{ vars.AGENT_PLAN_BUDGET_USD || '10' }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+
+      - name: Consume the trigger label and check who set it
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          SENDER: ${{ github.event.sender.login }}
+        run: node scripts/agents/trigger.js --label run:plan --issue "$ISSUE" --sender "$SENDER"
+
+      - name: Assemble the planner's inputs
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node scripts/agents/plan.js prepare --issue "$ISSUE" --out "$RUNNER_TEMP/plan"
+
+      - name: Plan (read-only session)
+        uses: ./.github/actions/run-claude
+        env:
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        with:
+          prompt-file: ${{ runner.temp }}/plan/prompt.md
+          session-dir: ${{ runner.temp }}/plan/session
+          model: ${{ env.MODEL }}
+          effort: ${{ env.EFFORT }}
+          tools: Read,Grep,Glob
+          max-budget-usd: ${{ env.BUDGET }}
+
+      - name: Validate and post the plan
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node scripts/agents/plan.js publish --issue "$ISSUE" --session-dir "$RUNNER_TEMP/plan/session" --model "$MODEL" --effort "$EFFORT"
+
+  approve:
+    if: github.event.label.name == 'run:plan-approve' && !github.event.issue.pull_request
+    concurrency:
+      group: agent-plan-${{ github.event.issue.number }}
+      cancel-in-progress: false
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      issues: write
+    env:
+      ISSUE: ${{ github.event.issue.number }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+
+      - name: Consume the trigger label and check who set it
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          SENDER: ${{ github.event.sender.login }}
+        run: node scripts/agents/trigger.js --label run:plan-approve --issue "$ISSUE" --sender "$SENDER"
+
+      - name: Create the task issues
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node scripts/agents/plan.js approve --issue "$ISSUE"

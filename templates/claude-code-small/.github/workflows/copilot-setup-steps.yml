@@ -1,0 +1,33 @@
+# Prepares the environment GitHub Copilot's coding agent works in, before it
+# reads the task. Its job must be named `copilot-setup-steps`. Mirror your CI
+# job's setup here, so the validate command behaves the same for Copilot, for
+# Claude sessions and for CI. Install dependencies here too: once Copilot
+# starts, its firewall may block registries you haven't allowed.
+name: Copilot setup steps
+
+on:
+  workflow_dispatch:
+  # Runs on changes to this file, so a broken setup shows up in its own PR
+  # instead of in Copilot's first task.
+  push:
+    paths: [.github/workflows/copilot-setup-steps.yml]
+  pull_request:
+    paths: [.github/workflows/copilot-setup-steps.yml]
+
+permissions:
+  contents: read
+
+jobs:
+  copilot-setup-steps:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      # ADAPT: your toolchain and dependency install, as in CI. For example:
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+      - run: npm ci
+      # Proves the toolchain works before Copilot relies on it. Drop this if
+      # validate is slow; Copilot runs it again after its change.
+      - run: npm run validate

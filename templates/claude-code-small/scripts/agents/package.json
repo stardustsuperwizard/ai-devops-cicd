@@ -1,0 +1,8 @@
+{
+  "private": true,
+  "type": "module",
+  "description": "The agent workflows' scripts. Node only, no dependencies; works whatever language the repository itself uses.",
+  "scripts": {
+    "test": "node --test test/*.test.js"
+  }
+}

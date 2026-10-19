@@ -309,3 +309,22 @@ not data.
   caught once for everyone: a check-name collision that lets a skipped job
   read as the verdict (see the example). Both argue for a small callable
   action with its own tests over copy-paste, at least for the session runner.
+
+### 2026-10-19 — Claude Code, after the first live planner run
+
+Follow-up to the entry above, from the same adopter. Its planner has now run
+for real: a seven-task plan in 9 minutes for $3.87, validated first time,
+approved and materialised in 28 seconds. Details in the example.
+
+- **Q1.** The `agent-session` marker worked as intended: the cost, turns and
+  duration above were read straight off the plan comment. Nothing reads the
+  markers in bulk yet.
+- **Q4.** Answered by building it: the adopter's control plane is now
+  [`templates/claude-code-small/`](../../templates/claude-code-small/), with
+  the project-specific parts moved into one config file and 30 tests. Making
+  it portable found two Enterprise Server bugs that a single-host copy would
+  have kept. That is the case for callable, tested automation in one line.
+- **New for the profile:** a second implementer vendor (Copilot) was added in
+  one small PR, because the instructions were already vendor-neutral. The
+  profile's "one vendor is fine" holds, and adding a second is cheap if HND-6
+  is kept from the start.

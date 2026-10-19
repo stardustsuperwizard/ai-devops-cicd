@@ -1,0 +1,71 @@
+name: Agent task
+description: One buildable change with checkable acceptance criteria. Passes the cold-start test.
+title: ""
+labels: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Write this so someone who has read **only this issue** could build it and know when they're done. See docs/AGENT_WORKFLOW.md → *Plan*. Label it `agent-ready` only once the definition of ready holds.
+  - type: textarea
+    id: goal
+    attributes:
+      label: Goal
+      description: One or two sentences. What changes, and for whom?
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Context
+      description: Decisions already made, links to the tracking issue and design doc sections. Framing only; it doesn't widen the scope.
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope
+      description: What to build.
+    validations:
+      required: true
+  - type: textarea
+    id: files
+    attributes:
+      label: Expected files
+      description: Files or folders expected to change. Flag `.github/workflows/` or repository settings; agents can't always change those unattended.
+    validations:
+      required: true
+  - type: textarea
+    id: constraints
+    attributes:
+      label: Constraints
+      description: Rules this change must respect beyond AGENTS.md (an API to keep stable, performance, data compatibility).
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: A checklist. Each item names its proof (a test, a command's output, a screenshot). "Works correctly" is not a criterion.
+      value: |
+        - [ ]
+        - [ ] The validate command in AGENTS.md passes; new behaviour has tests that fail without the change
+    validations:
+      required: true
+  - type: textarea
+    id: out-of-scope
+    attributes:
+      label: Out of scope
+      description: What not to touch, so the reviewer can flag scope creep.
+    validations:
+      required: true
+  - type: input
+    id: depends
+    attributes:
+      label: Depends on
+      description: Issues that must be merged first, e.g. "#27, #28". Leave blank if none.
+  - type: dropdown
+    id: human-check
+    attributes:
+      label: Needs a human check before merge?
+      options:
+        - "Yes: a person should try the change before it merges"
+        - "No: the automated checks prove it"
+    validations:
+      required: true
