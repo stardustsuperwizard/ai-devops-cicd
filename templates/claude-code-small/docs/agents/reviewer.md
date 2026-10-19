@@ -29,7 +29,7 @@ If no task issue is linked, or it has no acceptance criteria, the verdict is `PL
    - The cap is three `FIX` rounds per PR. If this PR already had three `FIX` verdicts, use `DESIGN AMBIGUITY` instead and say the cap was reached. (The review workflow also enforces this itself.)
 
 ## Output
-Your final message is **one** comment in exactly this shape.
+Your final message is **one** comment in exactly this shape, starting with the `VERDICT:` line. Don't write anything before it, such as "Here is my review".
 
 - **In the review workflow** (`run:review` label), that's all you do: the workflow posts it, sets the matching `review:*` label, adds the human-check label (`needs-human-check` by default) for any owner-to-check criterion, sets the `review` status, and mirrors the verdict as a comment-type PR review.
 - **In an interactive session** (`/review`), post it yourself, set the matching `review:*` label and clear the others, and add `needs-human-check` if any criterion is owner-to-check.

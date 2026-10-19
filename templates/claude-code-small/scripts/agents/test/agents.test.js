@@ -157,6 +157,23 @@ test('verdict: a session that did not complete never publishes, even with a perf
   }
 });
 
+test('verdict: a sentence before a complete review is dropped, not fatal', () => {
+  const v = extractReviewVerdict(`I'm writing up the verdict now. Review finished: one real bug.\n\n${review('FIX')}`, 'completed');
+  assert.equal(v.ok, true, v.reason);
+  assert.equal(v.verdict, 'FIX');
+  assert.equal(v.droppedPreamble, true);
+  assert.match(v.body, /^VERDICT: FIX/);
+  assert.doesNotMatch(v.body, /writing up/);
+});
+
+test('verdict: a preamble never rescues a truncated or ambiguous review', () => {
+  assert.equal(extractReviewVerdict(`Done.\n${review('PASS', { end: false })}`, 'completed').ok, false, 'truncated');
+  const two = extractReviewVerdict(`I nearly wrote VERDICT: PASS\nVERDICT: PASS\n\n${review('FIX')}`, 'completed');
+  assert.equal(two.ok, false, 'two verdict lines');
+  assert.match(two.reason, /ambiguous/);
+  assert.equal(extractReviewVerdict(`Preamble only.\nVERDICT: PASS`, 'completed').ok, false, 'no sections');
+});
+
 test('verdict: a missing section is rejected', () => {
   const v = extractReviewVerdict(review('FIX', { drop: 'scope' }), 'completed');
   assert.equal(v.ok, false);

@@ -23,7 +23,7 @@ The scripts are Node with no dependencies, so the repository itself can be in an
 | `.github/copilot-instructions.md`, `CLAUDE.md` | One-line pointers to `AGENTS.md` | No |
 | `.claude/settings.json`, `.claude/commands/` | Denies merge/approve/auto-merge; `/plan`, `/implement`, `/review`, `/fix` | No |
 | `scripts/agents/` | Prompt building, outcome classification, verdict and plan validation, GitHub calls | No |
-| `scripts/agents/test/` | 33 tests of the above: `cd scripts/agents && npm test` | No |
+| `scripts/agents/test/` | 35 tests of the above: `cd scripts/agents && npm test` | No |
 | `docs/agents/*.md` | The four roles | Lightly |
 | `docs/AGENT_WORKFLOW.md` | The process, labels and deviations | **Yes**: deviations |
 | `AGENTS.md` | Canonical instructions | **Yes**: fill every `ADAPT` |
