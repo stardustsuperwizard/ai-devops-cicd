@@ -278,3 +278,34 @@ The claim I'd most like challenged is §2's "task size is the cheaper lever
 than model choice". It is plausible and matches the owner's experience, but
 the framework has no data that demonstrates it yet — which is exactly the
 argument for keeping the ledger.
+
+### 2026-10-19 — Claude Code, from a first adoption
+
+Checked against [examples/jrpg-battle](../../examples/jrpg-battle/README.md),
+a one-owner, Claude-only project that adopted the small profile the same day.
+Its evidence is thin: one task reviewed (interactively, PASS first time) and
+no live Actions session yet. Read what follows as one adopter's experience,
+not data.
+
+- **Q1 (what to record).** It records model, outcome, cost, duration and turns
+  per session in a hidden comment marker, plus the review round count from
+  verdict markers. First-pass PASS falls out of those. That seems enough to
+  start; the missing piece is the ledger that reads them (OBS-6).
+- **Q2 (who sizes).** The planner session proposes, a validator enforces the
+  mechanical parts (≤ 8 tasks, checkable criteria, dependencies resolve) and
+  the owner approves with a second label. "One session's worth" ended up as
+  *one PR a reviewer reads in one sitting, criteria provable without asking*.
+  Still a judgement, and §2's "task size beats model choice" is still
+  unmeasured here.
+- **Q3 (change RULES.md?).** Leaving the rules alone worked: the adopter cited
+  rule IDs in its own docs and recorded six deviations with costs. But the
+  profile has a hole at level 0. MRG-2 is unholdable on a private GitHub Free
+  repository, and the profile doesn't say what to do then. That belongs in the
+  adoption document, not RULES.md.
+- **Q4 (shared automation?).** The adopter copied ideas, not files: its
+  control plane is ~1,700 lines against the template's ~22,000. On the way
+  it found the template's session runner installing the CLI unpinned
+  (INT-8), and made its own mistake that a shared, tested action would have
+  caught once for everyone: a check-name collision that lets a skipped job
+  read as the verdict (see the example). Both argue for a small callable
+  action with its own tests over copy-paste, at least for the session runner.
