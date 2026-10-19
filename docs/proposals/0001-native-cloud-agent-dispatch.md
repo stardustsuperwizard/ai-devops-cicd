@@ -3,6 +3,7 @@
 | | |
 | --- | --- |
 | **Status** | Brainstorm. Nothing decided, nothing built. |
+| **Read first** | [0002 — Goals first](0002-goals-first-vendor-neutral.md). This document is one GitHub realization of the vendor-neutral pattern described there. |
 | **Origin** | A planning conversation between the repository owner and Claude Code, 2026-10-17/18, held against `stardustsuperwizard/gladiator-engine` |
 | **Applies to** | The GitHub Actions realization (`templates/github-actions/`) and its production instance, gladiator-engine. If adopted, parts would change the rules themselves — see [Rule impact](#rule-impact). |
 | **Names products** | Yes, deliberately. This is a realization proposal. CONTRIBUTING rule 1 binds `docs/architecture/` and `RULES.md`, not this file. |
