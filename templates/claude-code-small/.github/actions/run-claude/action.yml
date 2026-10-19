@@ -1,0 +1,95 @@
+# The one place that knows how to run a Claude Code session (ai-devops-cicd
+# SES-1). Callers declare intent with `tools`; nothing above this file passes
+# CLI flags. Evidence lands in `session-dir` for the caller's classifier:
+#   ran, not-run-reason, exit-code, envelope.json, stderr.log, tree-modified
+#
+# The session gets the Claude credential and nothing else: no GitHub token is
+# in its environment, and the checkout keeps no git credentials, so it cannot
+# push or post (SEC-3). Pass the credential as env on the step that uses this:
+#   CLAUDE_CODE_OAUTH_TOKEN or ANTHROPIC_API_KEY.
+name: Run Claude Code session
+description: Run one headless Claude Code session from a prompt file, with a fixed tool set and budget.
+
+inputs:
+  prompt-file:
+    description: Prompt file, outside the working tree (SES-4). Passed on stdin, never as an argument (SES-3).
+    required: true
+  session-dir:
+    description: Directory for the evidence files.
+    required: true
+  model:
+    description: Model id.
+    required: true
+  effort:
+    description: low, medium, high, xhigh or max.
+    default: high
+  tools:
+    description: >-
+      The only built-in tools the session has. Read-only roles pass
+      "Read,Grep,Glob". Anything not listed doesn't exist in the session,
+      which is how read-only is enforced (CAP-1), not by instruction.
+    default: Read,Grep,Glob
+  max-budget-usd:
+    description: Hard spending ceiling for the session.
+    default: "5"
+  check-dirs:
+    description: Space-separated git working trees that must be unchanged after the session.
+    default: "."
+
+runs:
+  using: composite
+  steps:
+    - name: Install Claude Code (pinned by the lockfile)
+      shell: bash
+      run: npm ci --prefix "$GITHUB_WORKSPACE/.github/agent-tools" --no-audit --no-fund --loglevel=error
+
+    - name: Run the session
+      shell: bash
+      env:
+        PROMPT_FILE: ${{ inputs.prompt-file }}
+        SESSION_DIR: ${{ inputs.session-dir }}
+        MODEL: ${{ inputs.model }}
+        EFFORT: ${{ inputs.effort }}
+        TOOLS: ${{ inputs.tools }}
+        BUDGET: ${{ inputs.max-budget-usd }}
+        CHECK_DIRS: ${{ inputs.check-dirs }}
+      run: |
+        set -uo pipefail
+        mkdir -p "$SESSION_DIR"
+        if [ -z "${CLAUDE_CODE_OAUTH_TOKEN:-}" ] && [ -z "${ANTHROPIC_API_KEY:-}" ]; then
+          # "Did not run" is not "failed" (INT-5).
+          echo false > "$SESSION_DIR/ran"
+          echo "No CLAUDE_CODE_OAUTH_TOKEN or ANTHROPIC_API_KEY secret is set for this repository." > "$SESSION_DIR/not-run-reason"
+          echo "::warning::No Claude credential secret is set; the session did not run."
+          exit 0
+        fi
+        claude="$GITHUB_WORKSPACE/.github/agent-tools/node_modules/.bin/claude"
+        echo true > "$SESSION_DIR/ran"
+        code=0
+        # No MCP servers (--strict-mcp-config with none given), only the listed
+        # tools, nothing that asks permission, nothing saved for resuming.
+        "$claude" -p \
+          --output-format json \
+          --model "$MODEL" \
+          --effort "$EFFORT" \
+          --tools "$TOOLS" \
+          --allowedTools "$TOOLS" \
+          --permission-mode dontAsk \
+          --strict-mcp-config \
+          --no-session-persistence \
+          --max-budget-usd "$BUDGET" \
+          < "$PROMPT_FILE" > "$SESSION_DIR/envelope.json" 2> "$SESSION_DIR/stderr.log" || code=$?
+        echo "$code" > "$SESSION_DIR/exit-code"
+        # Verify read-only held, rather than trusting it did.
+        modified=false
+        for dir in $CHECK_DIRS; do
+          if [ -n "$(git -C "$dir" status --porcelain --untracked-files=all)" ]; then
+            echo "::error::The session changed files in $dir:"
+            git -C "$dir" status --porcelain --untracked-files=all | head -20
+            modified=true
+          fi
+        done
+        echo "$modified" > "$SESSION_DIR/tree-modified"
+        echo "Session exit code $code; tree modified: $modified."
+        # Always succeed here: the caller classifies the evidence and decides.
+        exit 0

@@ -1,0 +1,4 @@
+{
+  "areas": ["backend", "frontend", "infra", "docs"],
+  "humanCheckLabel": "needs-human-check"
+}

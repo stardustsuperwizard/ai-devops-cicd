@@ -158,15 +158,53 @@ that code will read them:
 
 Thin, and labelled as such.
 
-- **One task through review.** The CI task (`npm run validate`) went through an
-  interactive `/review` and passed first time. It carried no session markers,
-  because it predates the Actions reviewer. One data point says nothing about
-  the first-pass rate.
-- **No live Actions session yet.** The workflows are verified by unit tests,
-  scenario runs against a fake API, and actionlint. The self-test is waiting
-  on the secret. Treat the Actions side as untested against a real model.
+- **Two tasks through review, both PASS first time.** The CI task and the
+  golden-baselines task went through interactive `/review`. The second review
+  proved its key criterion by breaking it: it changed one hero stat, saw the
+  baseline test fail with the right message, and reverted. Two data points say
+  nothing about the first-pass rate.
+- **First live planner run** (2026-10-19, on the race mode's "path, levels and
+  experience" issue): completed in 9 minutes, 33 turns, **$3.87** at `high`
+  effort under a $10 budget. The plan passed validation first time: seven
+  tasks, dependencies in order, each with named tests and exact baseline
+  numbers. Approval created the seven issues in 28 seconds, linked as
+  sub-issues, with plan ids rewritten to real issue numbers.
+- **What the planner did well:** it listed the decisions it had made rather
+  than asked ("rest is automatic", "levels are race-only"), so the owner could
+  overrule them before approving; and it flagged that its first two tasks
+  change core contracts and might be better as one focused session. Both are
+  now in the template's planner guidance.
+- **What it did less well:** its content task carries target numbers it
+  guessed (party level 4–6 at the mid-boss). A tuning task against guessed
+  targets is the kind most likely to burn fix rounds; it should be done with
+  a person, not left unattended.
+- **No live review session yet.** The Actions reviewer is still verified only
+  by tests and a fake API.
 - **One real bug found after merge** (below), by reading the pipeline, not by
   any check.
+
+## Later findings
+
+- **Labels drift from their definition.** Labels added to `labels.json` after
+  the bootstrap ran were created on the fly the first time a workflow applied
+  them: grey, undescribed. DSP-8 says create labels before anything depends on
+  them; the practical rule is *rerun the bootstrap whenever the file changes*.
+- **Label triggers aren't always reachable from a phone.** The owner could not
+  add `run:plan` from the GitHub mobile app and asked an agent session to add
+  it. The cause wasn't found. A trigger that a person can't reach from where
+  they are is a HUM-1 problem: the human act exists but isn't available.
+- **Adding Copilot as a second implementer was cheap**, because the
+  instructions were already vendor-neutral (HND-6): a one-line
+  `copilot-instructions.md` pointing at `AGENTS.md`, a setup-steps workflow
+  mirroring CI, and a Copilot section in the implementer role. Two things
+  changed in the deviation log: Copilot's PRs have their own author, so the
+  owner *can* approve them (MRG-1 improves); and `@copilot` fixes see the whole
+  PR thread, not only the latest verdict (a new CTX-5 deviation).
+- **Extracting the template found two portability bugs** that never show on
+  github.com: GraphQL was posted to `$GITHUB_API_URL/graphql`, which is wrong
+  on Enterprise Server, and the PR fetch hard-coded `https://github.com`. Both
+  are fixed in [`templates/claude-code-small/`](../../templates/claude-code-small/).
+  A template run only on one host has only been tested on one host.
 
 ## Findings worth sending upstream
 

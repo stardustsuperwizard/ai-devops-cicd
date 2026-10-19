@@ -69,7 +69,7 @@ by the platform rather than by a document asking people to be careful.
 | --- | --- |
 | **The whole pipeline, intake to merge** | [`docs/PIPELINE.md`](docs/PIPELINE.md) |
 | **The rules** | [`RULES.md`](RULES.md) |
-| **Working files to copy** | [`templates/github-actions/`](templates/github-actions/) |
+| **Working files to copy** | [`templates/github-actions/`](templates/github-actions/) (full system) · [`templates/claude-code-small/`](templates/claude-code-small/) (small profile, Claude Code) |
 | **To adapt it to different tools** | [`docs/adaptation/`](docs/adaptation/) — survey, seam catalogue, agent playbook, equivalence tests |
 | To know whether what you built conforms | [`docs/architecture/04-conformance.md`](docs/architecture/04-conformance.md) |
 | The abstract model beneath it | [`docs/architecture/00-the-model.md`](docs/architecture/00-the-model.md) |
@@ -81,7 +81,8 @@ by the platform rather than by a document asking people to be careful.
 ```
 docs/PIPELINE.md       The guide. Intake to merge, in one narrative.
 RULES.md               98 normative rules. Numbered, checkable, cited by ID.
-templates/             Working files. GitHub Actions, ~22k lines.
+templates/             Working files. GitHub Actions, ~22k lines; and a small-
+                       profile Claude Code kit, ~2k lines.
 docs/architecture/     The abstract model: entities, components, substrate,
                        interfaces, conformance. No products named.
 docs/adaptation/       Methodology for moving it to different tools: the

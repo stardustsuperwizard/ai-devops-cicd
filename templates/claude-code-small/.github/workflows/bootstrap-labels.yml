@@ -1,0 +1,38 @@
+# Creates or updates every label in .github/labels.json. Idempotent, and it
+# never deletes a label. Run it from the Actions tab (works from the GitHub
+# mobile app) before relying on any label in docs/AGENT_WORKFLOW.md.
+name: Bootstrap labels
+
+on:
+  workflow_dispatch:
+
+permissions:
+  issues: write
+  contents: read
+
+jobs:
+  labels:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/github-script@v8
+        with:
+          script: |
+            const fs = require('fs');
+            const wanted = JSON.parse(fs.readFileSync('.github/labels.json', 'utf8'));
+            const { owner, repo } = context.repo;
+            const existing = await github.paginate(github.rest.issues.listLabelsForRepo, { owner, repo, per_page: 100 });
+            const byName = new Map(existing.map((l) => [l.name.toLowerCase(), l]));
+            for (const label of wanted) {
+              const current = byName.get(label.name.toLowerCase());
+              if (!current) {
+                await github.rest.issues.createLabel({ owner, repo, ...label });
+                core.info(`created ${label.name}`);
+              } else if (current.color.toLowerCase() !== label.color.toLowerCase() || (current.description ?? '') !== label.description) {
+                await github.rest.issues.updateLabel({ owner, repo, name: current.name, color: label.color, description: label.description });
+                core.info(`updated ${label.name}`);
+              } else {
+                core.info(`ok ${label.name}`);
+              }
+            }
