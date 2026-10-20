@@ -49,6 +49,7 @@ Then try it on something small: put `run:plan` on an idea issue, read the plan, 
 - **Forks are not reviewed.** `agent-review.yml` runs on `pull_request_target` with code from the default branch, and skips PRs from forks, which never receive the secret.
 - **Who can trigger:** a label starts a session only when the person who added it has write access or above, because a session spends the budget [HUM-1].
 - **Sub-issues:** task issues are linked to their source issue as sub-issues where the API allows. Where it doesn't, they are still created; the link is only a warning in the log.
+- **Bots can't hand work to bots.** Copilot ignores `@copilot` from the Actions bot, so after a `FIX` a person posts the `@copilot` comment. Slack apps behave the same way. It's deliberate on the platforms' part (no bot loops, no borrowed permissions), and it keeps every session started by a person [HUM-1]. Don't build around it with a bot account that passes as a person.
 - **Labels from a phone:** on the first adopter the owner couldn't add a label from the GitHub mobile app and asked an agent to add it. The cause wasn't found. If that blocks you, the web UI works on mobile.
 
 ## How it holds the firm rules

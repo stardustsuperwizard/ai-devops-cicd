@@ -324,11 +324,10 @@ test('pr review: always a comment review, never an approval or a block', () => {
   }
 });
 
-test('pr review: only a FIX on a Copilot PR asks Copilot to act', () => {
-  assert.match(renderPrReview({ verdict: 'FIX', prAuthor: 'Copilot' }).body, /@copilot/);
-  assert.doesNotMatch(renderPrReview({ verdict: 'FIX', prAuthor: 'stardustsuperwizard' }).body, /@copilot/);
-  assert.doesNotMatch(renderPrReview({ verdict: 'PASS', prAuthor: 'Copilot' }).body, /@copilot/);
-  assert.doesNotMatch(renderPrReview({ verdict: 'DESIGN AMBIGUITY', prAuthor: 'Copilot' }).body, /@copilot/);
+test('pr review: never mentions @copilot, which ignores bots', () => {
+  for (const verdict of ['PASS', 'FIX', 'PLANNING FAILURE', 'DESIGN AMBIGUITY']) {
+    assert.doesNotMatch(renderPrReview({ verdict, commentUrl: 'u', prAuthor: 'Copilot' }).body, /@copilot/i, verdict);
+  }
 });
 
 // ---------- config ----------

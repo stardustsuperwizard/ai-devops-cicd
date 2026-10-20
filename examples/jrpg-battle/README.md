@@ -185,6 +185,27 @@ Thin, and labelled as such.
 
 ## Later findings
 
+- **Bots can't hand off to Copilot.** The reviewer's `FIX` review on a
+  Copilot PR ended with `@copilot address the latest review verdict`, on the
+  bet that Copilot would act on it. It didn't: Copilot acts only on mentions
+  from people, and the owner had to post the line. The owner saw the same in
+  Slack, where apps ignore requests from other bots. Both platforms are
+  enforcing what HUM-1 and DSP-7 ask for: no automation loops, and every new
+  session started by a person. The line was removed, and the checklist says
+  the fix comment is always the owner's step.
+- **The Copilot session limit is the setup job's timeout.** `timeout-minutes:
+  10` on `copilot-setup-steps` looked like a cap on setup. It capped the whole
+  session: Copilot was told to wrap up and stopped at 9m41s. The work had
+  landed by minute 7, so the window, not the task, was too small. Raised to
+  30, and sessions are now timed from their Actions runs so the reviewer can
+  tell when a task ran out of time (a planning failure, not a fix).
+- **Two live-only bugs in the reviewer.** The first live review failed with a
+  403 because declared job permissions *replace* the defaults and `checks:
+  read` was missing; the fake API used offline had no notion of scopes. The
+  second threw away a complete review because the model wrote one sentence
+  before `VERDICT:`. The first is now pinned by a test; the second relaxed to
+  "exactly one verdict line, followed by a complete review".
+
 - **Labels drift from their definition.** Labels added to `labels.json` after
   the bootstrap ran were created on the fly the first time a workflow applied
   them: grey, undescribed. DSP-8 says create labels before anything depends on

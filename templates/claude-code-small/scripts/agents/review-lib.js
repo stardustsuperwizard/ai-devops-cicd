@@ -124,19 +124,16 @@ export function reviewStatus(verdict) {
 
 /**
  * The PR review that mirrors a verdict in the Reviews panel, so it sits where
- * people (and Copilot) look for reviews. Always a COMMENT review: a bot
- * approval would be a machine verdict counting as approval (ai-devops-cicd
- * MRG-1, MRG-3), and a bot "request changes" would block merging until someone
- * dismissed it. The verdict comment stays the record: the cap counts its markers.
+ * people look for reviews. Always a COMMENT review: a bot approval would be a
+ * machine verdict counting as approval (ai-devops-cicd MRG-1, MRG-3), and a
+ * bot "request changes" would block merging until someone dismissed it. The
+ * verdict comment stays the record: the cap counts its markers.
  *
- * On a Copilot PR, a FIX also asks Copilot to act. Whether Copilot answers a
- * review from a bot is untested; if it doesn't, comment `@copilot` yourself.
+ * It never mentions @copilot. Copilot ignores mentions from bots (tried on
+ * the first adopter's PR), and a line that does nothing suggests the handoff is automatic. A
+ * person starts each fix round, as they start every session (HUM-1).
  */
-export function renderPrReview({ verdict, commentUrl, prAuthor }) {
+export function renderPrReview({ verdict, commentUrl }) {
   const where = commentUrl ? `[the verdict comment](${commentUrl})` : 'the verdict comment on this PR';
-  const lines = [`**VERDICT: ${verdict}.** The full review, with evidence, is in ${where}.`];
-  if (verdict === 'FIX' && /^copilot$/i.test(prAuthor ?? '')) {
-    lines.push('', '@copilot address the latest review verdict: fix each item under *Required before merge* in that comment, and nothing else.');
-  }
-  return { event: 'COMMENT', body: lines.join('\n') };
+  return { event: 'COMMENT', body: `**VERDICT: ${verdict}.** The full review, with evidence, is in ${where}.` };
 }
