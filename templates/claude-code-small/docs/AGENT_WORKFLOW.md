@@ -81,7 +81,7 @@ The reviewer compares the diff against the task's acceptance criteria. It does *
 
 The verdict comment's format is fixed (see `docs/agents/reviewer.md`). A comment missing the end marker or any section is **truncated and not a verdict** [OUT-5], however confident its first line.
 
-Each verdict is also posted as a **comment-type PR review**, so it shows in the Reviews panel. It never *approves* (a machine verdict must not count as approval [MRG-1, MRG-3]) and never *requests changes* (a bot's block would need dismissing). On a Copilot PR, a `FIX` review also asks `@copilot` to act; whether Copilot answers a bot's review is untested. Copilot's own review request is answered by a person: approve after a `PASS`.
+Each verdict is also posted as a **comment-type PR review**, so it shows in the Reviews panel. It never *approves* (a machine verdict must not count as approval [MRG-1, MRG-3]) and never *requests changes* (a bot's block would need dismissing). It never mentions `@copilot`: Copilot ignores bots, so a person starts each fix round. Copilot's own review request is answered by a person: approve after a `PASS`.
 
 ### Merge
 
@@ -91,7 +91,7 @@ A person merges, after: CI green, latest verdict `PASS`, and a human check if la
 
 1. **Approve and run workflows** (banner on the PR). GitHub holds CI on Copilot's pushes until someone with write access lets it run. This approves *running CI*, not the code. Repeat after every Copilot push.
 2. When `ci` is green, add **`run:review`**. Drafts are fine. Then act on the verdict:
-   - `FIX`: Copilot should pick up the review; if it doesn't, comment `@copilot address the latest review verdict`. When it pushes, go back to step 1.
+   - `FIX`: comment `@copilot address the latest review verdict` yourself. Copilot ignores the bot's review, so this step is always yours. When it pushes, go back to step 1.
    - `PLANNING FAILURE` or `DESIGN AMBIGUITY`: stop. The task needs you, not more code.
    - `PASS`: carry on. If it added `needs-human-check`, try what the verdict's *owner to check* lines name.
 3. **Ready for review** (bottom of the PR). Drafts can't merge. Leaving it until now means "not a draft" always means "passed review and the human check".

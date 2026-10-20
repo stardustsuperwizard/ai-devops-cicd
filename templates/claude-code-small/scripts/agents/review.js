@@ -155,7 +155,7 @@ async function publish() {
   if (verdict) {
     // Best effort: the comment, label and status are the verdict; this only mirrors it.
     try {
-      const review = renderPrReview({ verdict, commentUrl: posted?.html_url, prAuthor: pr.author });
+      const review = renderPrReview({ verdict, commentUrl: posted?.html_url });
       await gh.request('POST', `${gh.repoPath}/pulls/${pr.number}/reviews`, { commit_id: pr.headSha, ...review });
     } catch (err) {
       console.warn(`Could not post the PR review: ${err.message}`);
